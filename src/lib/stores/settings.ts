@@ -32,6 +32,7 @@ function createSettingsStore() {
 	return {
 		subscribe,
 		init,
+		get: () => get(store), // Get current value synchronously
 		set: (settings: Partial<AppSettings>) => {
 			update((current) => {
 				const updated = { ...current, ...settings };

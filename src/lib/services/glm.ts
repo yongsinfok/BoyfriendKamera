@@ -33,11 +33,17 @@ export class GLMService {
 	}
 
 	private async call(messages: GLMMessage[], imageUrl?: string): Promise<string> {
+		// Ensure imageUrl has the data URL prefix if it's just base64
+		let formattedImageUrl = imageUrl;
+		if (imageUrl && !imageUrl.startsWith('data:')) {
+			formattedImageUrl = `data:image/jpeg;base64,${imageUrl}`;
+		}
+
 		const requestBody = {
 			model: this.model,
-			messages: imageUrl
+			messages: formattedImageUrl
 				? [
-						{ role: 'user', content: imageUrl ? [{ type: 'image_url', image_url: { url: imageUrl } }, { type: 'text', text: messages[0].content }] : messages[0].content }
+						{ role: 'user', content: [{ type: 'image_url', image_url: { url: formattedImageUrl } }, { type: 'text', text: messages[0].content }] }
 				  ]
 				: messages,
 			temperature: 0.7,
@@ -55,6 +61,7 @@ export class GLMService {
 
 		if (!response.ok) {
 			const errorText = await response.text();
+			console.error('GLM API Error:', response.status, errorText);
 			throw new Error(`GLM API error: ${response.status} - ${errorText}`);
 		}
 
