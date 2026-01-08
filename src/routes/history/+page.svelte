@@ -20,7 +20,9 @@
 
 	async function loadSessions() {
 		loading = true;
-		sessions = await sessionService.getAll();
+		const allSessions = await sessionService.getAll();
+		// Filter out sessions with no photos
+		sessions = allSessions.filter(s => s.photos && s.photos.length > 0);
 		loading = false;
 	}
 
