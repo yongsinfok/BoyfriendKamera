@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { settings } from '$lib/stores/settings';
 
 	let apiKeyInput = '';
@@ -11,11 +12,12 @@
 
 	onMount(() => {
 		// Load current settings
-		settings.subscribe((s) => {
-			apiKeyInput = s.apiKey || '';
-			enableVibration = s.enableVibration ?? true;
-			enableGuideLines = s.enableGuideLines ?? true;
-		});
+		const saved = settings.get();
+		if (saved) {
+			apiKeyInput = saved.apiKey || '';
+			enableVibration = saved.enableVibration ?? true;
+			enableGuideLines = saved.enableGuideLines ?? true;
+		}
 	});
 
 	async function saveSettings() {
@@ -38,7 +40,7 @@
 	}
 
 	function goBack() {
-		window.history.back();
+		goto('/');
 	}
 </script>
 

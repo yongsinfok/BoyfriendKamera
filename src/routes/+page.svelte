@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { settings, currentStyle, presetStyles } from '$lib/stores/settings';
-import { goto } from '$app/navigation';
+	import { goto } from '$app/navigation';
 	import { isAnalyzing, aiSuggestion, createSession, addPhotoToSession } from '$lib/stores/camera';
 	import { getGLMService, captureFrame } from '$lib/services/glm';
 
@@ -9,6 +9,11 @@ import { goto } from '$app/navigation';
 	let stream: MediaStream | null = null;
 	let analysisInterval: number | null = null;
 	let isCapturing = false;
+
+	// Test mode for photo upload
+	let testMode = false;
+	let uploadedImage: string | null = null;
+	let fileInput: HTMLInputElement;
 
 	// Settings
 	let apiKey = $settings.apiKey;
@@ -32,7 +37,7 @@ import { goto } from '$app/navigation';
 				videoElement.srcObject = stream;
 				// Start AI analysis loop after camera is ready
 				videoElement.onloadedmetadata = () => {
-					if (apiKey) {
+					if (apiKey && !testMode) {
 						startAnalysisLoop();
 					}
 				};
@@ -65,7 +70,7 @@ import { goto } from '$app/navigation';
 		if (analysisInterval) clearInterval(analysisInterval);
 
 		analysisInterval = setInterval(async () => {
-			if (!videoElement || !apiKey || isCapturing) return;
+			if (!videoElement || !apiKey || isCapturing || testMode) return;
 
 			try {
 				isAnalyzing.set(true);
@@ -90,7 +95,7 @@ import { goto } from '$app/navigation';
 	}
 
 	async function takePhoto() {
-		if (!videoElement) return;
+		if (!videoElement || testMode) return;
 
 		isCapturing = true;
 
@@ -119,6 +124,78 @@ import { goto } from '$app/navigation';
 		}
 	}
 
+	// Handle file upload for testing
+	async function handleFileUpload(event: Event) {
+		const target = event.target as HTMLInputElement;
+		const file = target.files?.[0];
+		if (!file) return;
+
+		// Read and display the image
+		const reader = new FileReader();
+		reader.onload = (e) => {
+			uploadedImage = e.target?.result as string;
+		};
+		reader.readAsDataURL(file);
+
+		// Analyze the image
+		if (!apiKey) {
+			aiSuggestion.set({
+				composition_suggestion: '请先在设置中配置 API Key',
+				lighting_assessment: '',
+				angle_suggestion: '',
+				overall_score: 0,
+				should_vibrate: false
+			});
+			return;
+		}
+
+		isAnalyzing.set(true);
+		try {
+			const glm = getGLMService(apiKey, 'glm-4v-flash');
+			const style = $currentStyle?.name || '';
+
+			// Convert file to base64
+			const base64 = await new Promise<string>((resolve) => {
+				const reader = new FileReader();
+				reader.onload = (e) => {
+					const result = e.target?.result as string;
+					// Remove data:image/...;base64, prefix
+					resolve(result.split(',')[1]);
+				};
+				reader.readAsDataURL(file);
+			});
+
+			const suggestion = await glm.analyzeFrame(base64, style);
+			aiSuggestion.set(suggestion);
+
+			if (suggestion.should_vibrate && enableVibration && 'vibrate' in navigator) {
+				navigator.vibrate(50);
+			}
+		} catch (err) {
+			console.error('AI analysis failed:', err);
+			aiSuggestion.set({
+				composition_suggestion: '分析失败，请重试',
+				lighting_assessment: '',
+				angle_suggestion: '',
+				overall_score: 0,
+				should_vibrate: false
+			});
+		} finally {
+			isAnalyzing.set(false);
+		}
+	}
+
+	function toggleTestMode() {
+		testMode = !testMode;
+		if (testMode) {
+			stopCamera();
+			uploadedImage = null;
+		} else {
+			uploadedImage = null;
+			startCamera();
+		}
+	}
+
 	function showStyleSelector() {
 		// Simple implementation - cycle through styles
 		const styles = $presetStyles;
@@ -128,12 +205,10 @@ import { goto } from '$app/navigation';
 	}
 
 	function goToHistory() {
-		// Navigate to history page
 		goto('/history');
 	}
 
 	function goToSettings() {
-		// Navigate to settings page
 		goto('/settings');
 	}
 
@@ -156,17 +231,24 @@ import { goto } from '$app/navigation';
 </svelte:head>
 
 <div class="camera-container">
-	<video
-		bind:this={videoElement}
-		autoplay
-		playsinline
-		muted
-		class="camera-feed"
-	></video>
+	{#if testMode && uploadedImage}
+		<!-- Test mode - show uploaded image -->
+		<img src={uploadedImage} alt="Test image" class="test-image" />
+	{:else}
+		<!-- Camera mode -->
+		<video
+			bind:this={videoElement}
+			autoplay
+			playsinline
+			muted
+			class="camera-feed"
+			class:hidden={testMode}
+		></video>
+	{/if}
 
 	<div class="overlay">
-		<!-- Rule of thirds grid -->
-		{#if enableGuideLines}
+		<!-- Rule of thirds grid (only in camera mode) -->
+		{#if enableGuideLines && !testMode}
 			<div class="grid-lines">
 				<div class="grid-line vertical"></div>
 				<div class="grid-line vertical right"></div>
@@ -175,8 +257,11 @@ import { goto } from '$app/navigation';
 			</div>
 		{/if}
 
-		<!-- Top bar with style selector -->
+		<!-- Top bar with mode toggle and style selector -->
 		<div class="top-bar">
+			<button class="test-mode-btn" on:click={toggleTestMode}>
+				{testMode ? '📷 相机' : '🖼️ 测试'}
+			</button>
 			<button class="style-btn" on:click={showStyleSelector}>
 				{#if $currentStyle}
 					📷 {$currentStyle.name}
@@ -195,7 +280,7 @@ import { goto } from '$app/navigation';
 				{#if $aiSuggestion.composition_suggestion}
 					{$aiSuggestion.composition_suggestion}
 				{:else}
-					准备拍照中...
+					{testMode ? '请上传照片' : '准备拍照中...'}
 				{/if}
 				{#if $aiSuggestion.overall_score > 0.7}
 					<span class="score-good">✨</span>
@@ -210,13 +295,28 @@ import { goto } from '$app/navigation';
 		<!-- Bottom controls -->
 		<div class="bottom-controls">
 			<button class="history-btn-small" on:click={goToHistory} aria-label="历史记录">📚</button>
-			<button
-				class="shutter-btn"
-				on:click={takePhoto}
-				disabled={isCapturing}
-				class:capturing={isCapturing}
-				aria-label="拍照"
-			></button>
+			{#if testMode}
+				<!-- Upload button in test mode -->
+				<label class="upload-btn" aria-label="上传照片">
+					<input
+						type="file"
+						accept="image/*"
+						bind:this={fileInput}
+						on:change={handleFileUpload}
+						hidden
+					>
+					<span>📤 上传</span>
+				</label>
+			{:else}
+				<!-- Shutter button in camera mode -->
+				<button
+					class="shutter-btn"
+					on:click={takePhoto}
+					disabled={isCapturing}
+					class:capturing={isCapturing}
+					aria-label="拍照"
+				></button>
+			{/if}
 			<button class="settings-btn-small" on:click={goToSettings} aria-label="设置">⚙️</button>
 		</div>
 	</div>
@@ -236,6 +336,16 @@ import { goto } from '$app/navigation';
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
+	}
+
+	.camera-feed.hidden {
+		display: none;
+	}
+
+	.test-image {
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
 	}
 
 	.overlay {
@@ -288,6 +398,7 @@ import { goto } from '$app/navigation';
 		display: flex;
 		justify-content: space-between;
 		padding: 1rem;
+		gap: 0.5rem;
 		pointer-events: auto;
 	}
 
@@ -300,6 +411,11 @@ import { goto } from '$app/navigation';
 		font-size: 0.9rem;
 		cursor: pointer;
 		backdrop-filter: blur(10px);
+		white-space: nowrap;
+	}
+
+	.test-mode-btn {
+		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
 	}
 
 	.ai-suggestion {
@@ -370,6 +486,28 @@ import { goto } from '$app/navigation';
 
 	.shutter-btn.capturing {
 		opacity: 0.5;
+	}
+
+	.upload-btn {
+		width: 70px;
+		height: 70px;
+		border-radius: 50%;
+		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+		border: 4px solid rgba(255, 255, 255, 0.3);
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition: transform 0.1s, box-shadow 0.1s;
+	}
+
+	.upload-btn span {
+		color: white;
+		font-size: 0.8rem;
+	}
+
+	.upload-btn:active {
+		transform: scale(0.9);
 	}
 
 	/* Flash effect */
