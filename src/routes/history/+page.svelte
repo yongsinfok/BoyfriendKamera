@@ -66,11 +66,21 @@
 	}
 
 	async function deletePhoto(photo: Photo) {
+		const sessionId = photo.sessionId;
 		await photoService.delete(photo.id);
 		photos = photos.filter(p => p.id !== photo.id);
 		if (previewPhoto?.id === photo.id) {
 			closePreview();
 		}
+
+		// Check if session is now empty, delete it if so
+		const remainingPhotos = await photoService.getBySession(sessionId);
+		if (remainingPhotos.length === 0) {
+			// Delete the empty session and go back to session list
+			await sessionService.delete(sessionId);
+			selectedSession = null;
+		}
+
 		// Reload sessions to update counts
 		await loadSessions();
 		if (selectedSession) {
