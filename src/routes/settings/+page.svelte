@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { settings } from '$lib/stores/settings';
 
@@ -10,13 +10,23 @@
 	let isSaving = false;
 	let saveSuccess = false;
 
-	onMount(() => {
-		// Load current settings
-		const saved = settings.get();
-		if (saved) {
-			apiKeyInput = saved.apiKey || '';
-			enableVibration = saved.enableVibration ?? true;
-			enableGuideLines = saved.enableGuideLines ?? true;
+	let unsubscribe: (() => void) | null = null;
+
+	onMount(async () => {
+		// Initialize settings from IndexedDB
+		await settings.init();
+
+		// Subscribe to settings changes
+		unsubscribe = settings.subscribe((s) => {
+			apiKeyInput = s.apiKey || '';
+			enableVibration = s.enableVibration ?? true;
+			enableGuideLines = s.enableGuideLines ?? true;
+		});
+	});
+
+	onDestroy(() => {
+		if (unsubscribe) {
+			unsubscribe();
 		}
 	});
 

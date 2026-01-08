@@ -13,7 +13,8 @@ const DEFAULT_SETTINGS: AppSettings = {
 
 // Settings store
 function createSettingsStore() {
-	const { subscribe, set, update } = writable<AppSettings>(DEFAULT_SETTINGS);
+	const store = writable<AppSettings>(DEFAULT_SETTINGS);
+	const { subscribe, set, update } = store;
 
 	// Load settings from IndexedDB on init
 	async function init() {
@@ -21,6 +22,7 @@ function createSettingsStore() {
 		if (saved) {
 			set(saved);
 		}
+		return saved;
 	}
 
 	// Save settings to IndexedDB
