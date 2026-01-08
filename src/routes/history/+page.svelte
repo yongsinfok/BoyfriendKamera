@@ -11,6 +11,8 @@
 		let startY = 0;
 		let currentX = 0;
 		let isDragging = false;
+		const SWIPE_THRESHOLD = 60; // Pixels to trigger delete button
+		const MAX_SWIPE = 80; // Match delete button width
 
 		function onTouchStart(e: TouchEvent) {
 			startX = e.touches[0].clientX;
@@ -33,7 +35,7 @@
 
 				// Only allow left swipe (negative deltaX)
 				if (deltaX < 0) {
-					currentX = Math.max(deltaX, -100); // Max 100px left
+					currentX = Math.max(deltaX, -MAX_SWIPE);
 					node.style.transform = `translateX(${currentX}px)`;
 				}
 			}
@@ -42,10 +44,10 @@
 		function onTouchEnd() {
 			node.style.transition = 'transform 0.2s ease-out';
 
-			if (currentX < -70) {
+			if (currentX < -SWIPE_THRESHOLD) {
 				// Swiped far enough - show delete button
-				currentX = -100;
-				node.style.transform = 'translateX(-100px)';
+				currentX = -MAX_SWIPE;
+				node.style.transform = `translateX(-${MAX_SWIPE}px)`;
 				showDeleteButton();
 			} else {
 				// Not far enough - reset
@@ -454,7 +456,7 @@
 		top: 0;
 		right: 0;
 		bottom: 0;
-		width: 100px;
+		width: 80px;
 		background: #ef4444;
 		border: none;
 		border-radius: 12px;
@@ -465,6 +467,9 @@
 		z-index: 1;
 		transform: translateX(100%);
 		transition: transform 0.3s ease-out;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 
 	.session-delete-btn.visible {
