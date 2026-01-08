@@ -17,6 +17,14 @@
 	// Photo save feedback
 	let showSavedFeedback = false;
 
+	// Zoom controls
+	let zoomLevel = 1; // 1 = 1x, 2 = 2x, 0.5 = 0.5x
+	let zoomOptions = [0.5, 1, 2]; // Available zoom levels
+	let currentZoomIndex = 1; // Start at 1x (index 1)
+	let minZoom = 1;
+	let maxZoom = 1;
+	let zoomSupported = false;
+
 	// Settings
 	let apiKey = $settings.apiKey;
 	let enableVibration = $settings.enableVibration;
@@ -37,8 +45,9 @@
 			});
 			if (videoElement) {
 				videoElement.srcObject = stream;
-				// Start AI analysis loop after camera is ready
+				// Check zoom capabilities after camera is ready
 				videoElement.onloadedmetadata = () => {
+					checkZoomCapabilities();
 					if (apiKey && !testMode) {
 						startAnalysisLoop();
 					}
@@ -54,6 +63,45 @@
 				should_vibrate: false
 			});
 		}
+	}
+
+	function checkZoomCapabilities() {
+		const track = stream?.getVideoTracks()[0];
+		if (!track) return;
+
+		const capabilities = track.getCapabilities() as { zoom?: { min: number; max: number } };
+		if (capabilities?.zoom) {
+			minZoom = capabilities.zoom.min;
+			maxZoom = capabilities.zoom.max;
+			zoomSupported = true;
+			// Set default zoom to 1x
+			setZoom(1);
+		} else {
+			zoomSupported = false;
+		}
+	}
+
+	async function setZoom(level: number) {
+		const track = stream?.getVideoTracks()[0];
+		if (!track) return;
+
+		const capabilities = track.getCapabilities() as { zoom?: { min: number; max: number } };
+
+		if (capabilities?.zoom) {
+			const clampedLevel = Math.max(capabilities.zoom.min, Math.min(capabilities.zoom.max, level));
+			try {
+				await track.applyConstraints({ advanced: [{ zoom: clampedLevel }] });
+				zoomLevel = clampedLevel;
+			} catch (err) {
+				console.error('Failed to set zoom:', err);
+			}
+		}
+	}
+
+	function cycleZoom() {
+		currentZoomIndex = (currentZoomIndex + 1) % zoomOptions.length;
+		const newZoom = zoomOptions[currentZoomIndex];
+		setZoom(newZoom);
 	}
 
 	function stopCamera() {
@@ -308,6 +356,13 @@
 			</button>
 		</div>
 
+		<!-- Zoom control (only show when zoom is supported and in camera mode) -->
+		{#if zoomSupported && !testMode}
+			<button class="zoom-btn" on:click={cycleZoom}>
+				{zoomOptions[currentZoomIndex]}x
+			</button>
+		{/if}
+
 		<!-- Saved feedback toast -->
 		{#if showSavedFeedback}
 			<div class="saved-toast">
@@ -461,6 +516,30 @@
 
 	.test-mode-btn {
 		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+	}
+
+	/* Zoom button */
+	.zoom-btn {
+		position: absolute;
+		top: 5rem;
+		right: 1rem;
+		background: rgba(0, 0, 0, 0.6);
+		border: 2px solid rgba(255, 255, 255, 0.3);
+		color: white;
+		padding: 0.5rem 1rem;
+		border-radius: 20px;
+		font-size: 1rem;
+		font-weight: 600;
+		cursor: pointer;
+		pointer-events: auto;
+		backdrop-filter: blur(10px);
+		transition: all 0.2s;
+		min-width: 60px;
+	}
+
+	.zoom-btn:active {
+		transform: scale(0.95);
+		background: rgba(0, 0, 0, 0.8);
 	}
 
 	.ai-suggestion {
