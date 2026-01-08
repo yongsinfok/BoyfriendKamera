@@ -2,10 +2,12 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { settings } from '$lib/stores/settings';
+	import type { ModelType } from '$lib/types';
 
 	let apiKeyInput = '';
 	let enableVibration = true;
 	let enableGuideLines = true;
+	let defaultModel: ModelType = 'glm-4.6v-flash';
 	let showApiKey = false;
 	let isSaving = false;
 	let saveSuccess = false;
@@ -21,6 +23,7 @@
 			apiKeyInput = s.apiKey || '';
 			enableVibration = s.enableVibration ?? true;
 			enableGuideLines = s.enableGuideLines ?? true;
+			defaultModel = s.defaultModel ?? 'glm-4.6v-flash';
 		});
 	});
 
@@ -37,7 +40,8 @@
 		await settings.set({
 			apiKey: apiKeyInput.trim(),
 			enableVibration,
-			enableGuideLines
+			enableGuideLines,
+			defaultModel
 		});
 
 		isSaving = false;
@@ -137,6 +141,47 @@
 						disabled={isSaving}
 					/>
 					<span class="toggle-slider"></span>
+				</label>
+			</div>
+
+			<div class="setting-item">
+				<div class="setting-label">
+					<label>AI 模型</label>
+					<span class="setting-hint">选择 AI 分析模型</span>
+				</div>
+			</div>
+
+			<!-- Model selection as radio cards -->
+			<div class="model-selection">
+				<label class="model-card" class:selected={defaultModel === 'glm-4.6v-flash'}>
+					<input
+						type="radio"
+						name="model"
+						value="glm-4.6v-flash"
+						bind:group={defaultModel}
+						disabled={isSaving}
+					/>
+					<div class="model-info">
+						<div class="model-name">
+							GLM-4V-Flash
+							<span class="model-badge recommended">推荐</span>
+						</div>
+						<div class="model-desc">快速响应，适合实时预览</div>
+					</div>
+				</label>
+
+				<label class="model-card" class:selected={defaultModel === 'glm-4v'}>
+					<input
+						type="radio"
+						name="model"
+						value="glm-4v"
+						bind:group={defaultModel}
+						disabled={isSaving}
+					/>
+					<div class="model-info">
+						<div class="model-name">GLM-4V</div>
+						<div class="model-desc">高质量分析，速度较慢</div>
+					</div>
 				</label>
 			</div>
 		</div>
@@ -404,5 +449,84 @@
 
 	.save-btn.success {
 		background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+	}
+
+	/* Model selection cards */
+	.model-selection {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		margin-top: 1rem;
+	}
+
+	.model-card {
+		display: flex;
+		align-items: center;
+		background: rgba(255, 255, 255, 0.05);
+		border: 2px solid rgba(255, 255, 255, 0.1);
+		border-radius: 12px;
+		padding: 1rem;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.model-card:hover {
+		background: rgba(255, 255, 255, 0.08);
+	}
+
+	.model-card.selected {
+		border-color: #667eea;
+		background: rgba(102, 126, 234, 0.1);
+	}
+
+	.model-card input[type="radio"] {
+		position: absolute;
+		opacity: 0;
+		width: 0;
+		height: 0;
+	}
+
+	.model-card input[type="radio"]:focus-visible + .model-info {
+		outline: 2px solid #667eea;
+		outline-offset: 2px;
+	}
+
+	.model-info {
+		flex: 1;
+	}
+
+	.model-name {
+		font-weight: 600;
+		font-size: 0.95rem;
+		margin-bottom: 0.25rem;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.model-badge {
+		font-size: 0.7rem;
+		padding: 0.15rem 0.4rem;
+		border-radius: 4px;
+		font-weight: 500;
+	}
+
+	.model-badge.recommended {
+		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+		color: white;
+	}
+
+	.model-desc {
+		font-size: 0.8rem;
+		color: rgba(255, 255, 255, 0.5);
+	}
+
+	.model-card.selected .model-desc {
+		color: rgba(255, 255, 255, 0.7);
+	}
+
+	.model-card:has(input:disabled) {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 </style>

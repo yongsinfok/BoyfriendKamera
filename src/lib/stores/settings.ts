@@ -5,7 +5,7 @@ import type { AppSettings, ModelType, PresetStyle } from '$lib/types';
 // Default settings
 const DEFAULT_SETTINGS: AppSettings = {
 	apiKey: '',
-	defaultModel: 'glm-4v-flash',
+	defaultModel: 'glm-4.6v-flash',
 	defaultStyle: null,
 	enableVibration: true,
 	enableGuideLines: true,

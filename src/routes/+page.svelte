@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { settings, currentStyle, presetStyles } from '$lib/stores/settings';
+	import { settings, currentStyle, presetStyles, defaultModel } from '$lib/stores/settings';
 	import { goto } from '$app/navigation';
 	import { isAnalyzing, aiSuggestion, createSession, addPhotoToSession, currentSession, currentPhotoCount } from '$lib/stores/camera';
 	import { getGLMService, captureFrame } from '$lib/services/glm';
@@ -9,6 +9,9 @@
 	let stream: MediaStream | null = null;
 	let analysisInterval: number | null = null;
 	let isCapturing = false;
+
+	// For cleanup of visibility change listener
+	let visibilityChangeHandler: (() => void) | null = null;
 
 	// Test mode for photo upload
 	let testMode = false;
@@ -122,19 +125,24 @@
 		analysisInterval = setInterval(async () => {
 			if (!videoElement || !apiKey || isCapturing || testMode) return;
 
+			// Skip analysis if page is hidden (battery optimization)
+			if (document.hidden) return;
+
 			try {
 				isAnalyzing.set(true);
 				const base64Frame = captureFrame(videoElement, 0.5);
 
-				const glm = getGLMService(apiKey, 'glm-4.6v-flash');
+				// Use the selected model from settings
+				const model = $defaultModel || 'glm-4.6v-flash';
+				const glm = getGLMService(apiKey, model);
 				const style = $currentStyle?.name || '';
 				const suggestion = await glm.analyzeFrame(base64Frame, style);
 
 				aiSuggestion.set(suggestion);
 
-				// Vibrate if score is good
+				// Vibrate if score is good (lightweight vibration for battery)
 				if (suggestion.should_vibrate && enableVibration && 'vibrate' in navigator) {
-					navigator.vibrate(50);
+					navigator.vibrate(30); // Reduced from 50ms to 30ms for battery
 				}
 			} catch (err) {
 				console.error('AI analysis failed:', err);
@@ -142,6 +150,14 @@
 				isAnalyzing.set(false);
 			}
 		}, 2000) as unknown as number;
+	}
+
+	// Stop analysis loop (for battery optimization when page is hidden)
+	function stopAnalysisLoop() {
+		if (analysisInterval) {
+			clearInterval(analysisInterval);
+			analysisInterval = null;
+		}
 	}
 
 	async function takePhoto() {
@@ -204,7 +220,9 @@
 
 		isAnalyzing.set(true);
 		try {
-			const glm = getGLMService(apiKey, 'glm-4.6v-flash');
+			// Use the selected model from settings
+			const model = $defaultModel || 'glm-4.6v-flash';
+			const glm = getGLMService(apiKey, model);
 			const style = $currentStyle?.name || '';
 
 			// Compress image and convert to base64
@@ -299,10 +317,30 @@
 		createSession();
 		// Start camera
 		startCamera();
+
+		// Battery optimization: pause/resume AI when page visibility changes
+		visibilityChangeHandler = () => {
+			if (document.hidden) {
+				// Page is hidden, stop AI analysis to save battery
+				stopAnalysisLoop();
+			} else {
+				// Page is visible again, resume AI analysis if conditions are met
+				if (apiKey && !testMode && videoElement) {
+					startAnalysisLoop();
+				}
+			}
+		};
+
+		document.addEventListener('visibilitychange', visibilityChangeHandler);
 	});
 
 	onDestroy(() => {
 		stopCamera();
+		// Cleanup visibility change listener
+		if (visibilityChangeHandler) {
+			document.removeEventListener('visibilitychange', visibilityChangeHandler);
+			visibilityChangeHandler = null;
+		}
 	});
 </script>
 
