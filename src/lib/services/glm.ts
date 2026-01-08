@@ -71,36 +71,56 @@ export class GLMService {
 
 	// Real-time guidance analysis
 	async analyzeFrame(imageBase64: string, style?: string): Promise<AISuggestion> {
-		const styleHint = style ? `\n用户选择的风格：${style}` : '';
-		const prompt = `你是一个专业的拍照指导助手。分析当前取景画面，给出拍照建议。${styleHint}
+		const styleHint = style ? `\n目标风格：${style}。` : '';
+		const prompt = `你是一个友好的拍照助手。用简单易懂的中文给出拍照建议。${styleHint}
 
-请以 JSON 格式返回：
-{
-  "composition_suggestion": "构图建议，如：让她稍微往左移动",
-  "lighting_assessment": "光线评估，如：光线充足，正面光",
-  "angle_suggestion": "角度建议，如：蹲下来拍会更显腿长",
-  "overall_score": 0.8,
-  "should_vibrate": true,
-  "guide_lines": [
-    {"type": "rule_of_thirds", "position": "overlay"},
-    {"type": "standing_position", "x": 0.3, "y": 0.5}
-  ]
-}`;
+直接返回一个简短的拍照建议（15字以内），不要用JSON格式，不要用专业术语。
+
+示例：
+- "稍微往左边移一点"
+- "光线很好，就这样拍"
+- "蹲下来拍会更显高"
+- "退后两步，把背景拍全"
+- "转个角度，避开后面的树"
+- "✨ 完美！可以拍了"
+
+如果画面构图、光线都很好，建议以"✨"开头。建议要简短、口语化、友好。`;
 
 		const response = await this.call([{ role: 'user', content: prompt }], imageBase64);
 
-		try {
-			return JSON.parse(response);
-		} catch {
-			// Fallback if response is not valid JSON
-			return {
-				composition_suggestion: response,
-				lighting_assessment: '无法评估',
-				angle_suggestion: '',
-				overall_score: 0.5,
-				should_vibrate: false
-			};
+		// Clean up the response
+		let cleanText = response.trim()
+			.replace(/^["`]|["`]$/g, '') // Remove quotes and backticks
+			.replace(/```json\n?|\n?```/g, '') // Remove code blocks
+			.replace(/\n+/g, ' ') // Replace newlines with space
+			.trim();
+
+		// Remove common prefixes if AI still uses them
+		cleanText = cleanText
+			.replace(/^(建议|拍照建议|构图建议|AI建议)[:：]\s*/i, '')
+			.replace(/^(composition_suggestion|suggestion|text)[:：]\s*/i, '')
+			.trim();
+
+		// Check if response contains JSON and extract value if so
+		const jsonMatch = cleanText.match(/"composition_suggestion"\s*:\s*"([^"]+)"/);
+		if (jsonMatch) {
+			cleanText = jsonMatch[1];
 		}
+
+		// Determine if photo is good based on response
+		const isGood = cleanText.includes('✨') ||
+			cleanText.includes('完美') ||
+			cleanText.includes('很好') ||
+			cleanText.includes('就这样拍') ||
+			cleanText.includes('可以拍了');
+
+		return {
+			composition_suggestion: cleanText || '准备拍照中...',
+			lighting_assessment: '',
+			angle_suggestion: '',
+			overall_score: isGood ? 0.85 : 0.6,
+			should_vibrate: isGood
+		};
 	}
 
 	// Photo selection analysis
