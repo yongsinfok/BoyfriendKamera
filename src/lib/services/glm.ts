@@ -226,7 +226,7 @@ ${photoList}
 // Singleton instance
 let glmService: GLMService | null = null;
 
-export function getGLMService(apiKey: string, model: 'glm-4v' | 'glm-4v-flash' = 'glm-4v-flash'): GLMService {
+export function getGLMService(apiKey: string, model: 'glm-4v' | 'glm-4.6v' | 'glm-4.6v-flash' | 'glm-4.5v' = 'glm-4.6v-flash'): GLMService {
 	if (!glmService || glmService['apiKey'] !== apiKey) {
 		glmService = new GLMService(apiKey, model);
 	}

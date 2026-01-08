@@ -302,21 +302,17 @@
 
 		<!-- AI suggestion text -->
 		<div class="ai-suggestion">
-			{#if $isAnalyzing}
-				<span class="analyzing">AI 正在思考...</span>
-			{:else if $aiSuggestion}
-				{#if $aiSuggestion.composition_suggestion}
-					{$aiSuggestion.composition_suggestion}
-				{:else}
-					{testMode ? '请上传照片' : '准备拍照中...'}
-				{/if}
+			{#if $aiSuggestion && $aiSuggestion.composition_suggestion}
+				{$aiSuggestion.composition_suggestion}
 				{#if $aiSuggestion.overall_score > 0.7}
 					<span class="score-good">✨</span>
 				{/if}
+			{:else if $isAnalyzing}
+				<span class="analyzing">AI 正在思考...</span>
 			{:else if !apiKey}
 				请先在设置中配置 API Key
 			{:else}
-				正在初始化 AI...
+				{testMode ? '请上传照片' : '准备拍照中...'}
 			{/if}
 		</div>
 
