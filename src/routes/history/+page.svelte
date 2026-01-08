@@ -4,9 +4,13 @@
 	import { sessionService, photoService } from '$lib/services/db';
 	import { savePhotoToGallery } from '$lib/utils/photo';
 	import type { Photo, Session } from '$lib/types';
+	import { tick } from 'svelte';
+
+	// Track which session is swiped
+	let swipedSessionId: string | null = null;
 
 	// Swipe action for left swipe to reveal delete button
-	function swipeable(node: HTMLElement, params: { onDelete: () => void; onSelect: () => void }) {
+	function swipeable(node: HTMLElement, params: { sessionId: string; onDelete: () => void; onSelect: () => void }) {
 		let startX = 0;
 		let startY = 0;
 		let currentX = 0;
@@ -48,11 +52,12 @@
 				// Swiped far enough - show delete button
 				currentX = -MAX_SWIPE;
 				node.style.transform = `translateX(-${MAX_SWIPE}px)`;
-				showDeleteButton();
+				swipedSessionId = params.sessionId;
 			} else {
 				// Not far enough - reset
 				currentX = 0;
 				node.style.transform = 'translateX(0px)';
+				swipedSessionId = null;
 			}
 			isDragging = false;
 		}
@@ -65,22 +70,10 @@
 			resetPosition();
 		}
 
-		function showDeleteButton() {
-			const wrapper = node.parentElement;
-			const btn = wrapper?.querySelector('.session-delete-btn') as HTMLElement;
-			if (btn) btn.classList.add('visible');
-		}
-
-		function hideDeleteButton() {
-			const wrapper = node.parentElement;
-			const btn = wrapper?.querySelector('.session-delete-btn') as HTMLElement;
-			if (btn) btn.classList.remove('visible');
-		}
-
 		function resetPosition() {
 			currentX = 0;
 			node.style.transform = 'translateX(0px)';
-			hideDeleteButton();
+			swipedSessionId = null;
 		}
 
 		node.addEventListener('touchstart', onTouchStart, { passive: true });
@@ -264,6 +257,8 @@
 						<!-- Delete button (revealed on swipe) -->
 						<button
 							class="session-delete-btn"
+							style:opacity={swipedSessionId === session.id ? '1' : '0'}
+							style:pointer-events={swipedSessionId === session.id ? 'auto' : 'none'}
 							on:click|stopPropagation={() => deleteSession(session.id)}
 						>
 							删除
@@ -271,7 +266,7 @@
 						<!-- Session item -->
 						<div
 							class="session-item"
-							use:swipeable={{ onDelete: () => deleteSession(session.id), onSelect: () => selectSession(session) }}
+							use:swipeable={{ sessionId: session.id, onDelete: () => deleteSession(session.id), onSelect: () => selectSession(session) }}
 						>
 							<div class="session-icon">📷</div>
 							<div class="session-info">
@@ -454,7 +449,7 @@
 	.session-delete-btn {
 		position: absolute;
 		top: 0;
-		right: 0;
+		left: 0;
 		bottom: 0;
 		width: 80px;
 		background: #ef4444;
@@ -465,15 +460,12 @@
 		font-size: 1rem;
 		cursor: pointer;
 		z-index: 1;
-		transform: translateX(100%);
-		transition: transform 0.3s ease-out;
+		opacity: 0;
+		transition: opacity 0.2s ease-out;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-	}
-
-	.session-delete-btn.visible {
-		transform: translateX(0);
+		pointer-events: none;
 	}
 
 	.session-item {
