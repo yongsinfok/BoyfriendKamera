@@ -72,28 +72,26 @@ export class GLMService {
 	// Real-time guidance analysis
 	async analyzeFrame(imageBase64: string, style?: string): Promise<AISuggestion> {
 		const styleHint = style ? `\n目标风格：${style}。` : '';
-		const prompt = `你是一个友好的拍照助手，教完全不会拍照的人拍照。${styleHint}
+		const prompt = `你是一个超级友好的拍照助手，给拍照建议时要宽松和鼓励！${styleHint}
 
-直接告诉用户具体怎么操作！不要只说问题，要说解决方案！
+**重要标准：大部分情况都可以说"✨ 很好"！**
+只有明显的问题才需要调整（比如光线太暗、人太小、完全背光）。
 
 格式要求：
 - 15字以内
 - 不要用JSON格式
-- 必须是具体动作指令
 
-具体操作指导示例：
-- "手机往下移一点，平视拍"
-- "往后退两步，再拍"
-- "转个身，让人靠左一点"
-- "把手机举高，从上往下拍"
-- "往左边移，人别居中"
-- "找个窗户旁边拍，光线更好"
-- "蹲下来拍，人更显高"
-- "换个角度，避开后面的人"
-- "手机侧过来，横着拍"
+示例（多用鼓励）：
 - "✨ 很好，就这样拍"
+- "✨ 这个角度不错"
+- "✨ 光线很好，拍吧"
+- "✨ 构图可以了"
+- "光线暗一点，可以拍"
+- "人稍微大一点更好"
+- "往后退半步就好"
+- "稍微往左一点"
 
-只有在画面真的很完美时才说"✨ 很好，就这样拍"，否则一定要给出具体的操作指导！`;
+**记住：用户想要的是信心！不要一直挑毛病！如果画面没什么大问题，就鼓励用户拍照！**`;
 
 		const response = await this.call([{ role: 'user', content: prompt }], imageBase64);
 
@@ -117,8 +115,8 @@ export class GLMService {
 		}
 
 		// Determine if photo is good based on response
-		// Only trigger if it has the sparkle emoji and positive confirmation
-		const isGood = cleanText.includes('✨') && (cleanText.includes('很好') || cleanText.includes('完美') || cleanText.includes('就这样拍'));
+		// More lenient: just having ✨ or positive words is enough
+		const isGood = cleanText.includes('✨') || cleanText.includes('很好') || cleanText.includes('不错') || cleanText.includes('可以了') || cleanText.includes('拍吧');
 
 		return {
 			composition_suggestion: cleanText || '准备拍照中...',
