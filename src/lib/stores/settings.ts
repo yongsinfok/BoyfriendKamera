@@ -8,7 +8,8 @@ const DEFAULT_SETTINGS: AppSettings = {
 	defaultModel: 'glm-4v-flash',
 	defaultStyle: null,
 	enableVibration: true,
-	enableGuideLines: true
+	enableGuideLines: true,
+	hasSeenOnboarding: false
 };
 
 // Settings store

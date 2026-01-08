@@ -143,4 +143,5 @@ export interface AppSettings {
 	defaultStyle: string | null;
 	enableVibration: boolean;
 	enableGuideLines: boolean;
+	hasSeenOnboarding: boolean;
 }

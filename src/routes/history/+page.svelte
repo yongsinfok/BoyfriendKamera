@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { sessionService, photoService } from '$lib/services/db';
+	import { savePhotoToGallery } from '$lib/utils/photo';
 	import type { Photo, Session } from '$lib/types';
 
 	let sessions: Session[] = [];
@@ -10,6 +11,8 @@
 	let loading = true;
 	let previewPhoto: Photo | null = null;
 	let previewIndex = 0;
+	let isSaving = false;
+	let showSavedToast = false;
 
 	onMount(async () => {
 		await loadSessions();
@@ -73,6 +76,23 @@
 			if (updated) {
 				selectedSession = updated;
 			}
+		}
+	}
+
+	async function savePhoto(photo: Photo) {
+		isSaving = true;
+		try {
+			const timestamp = new Date(photo.createdAt).toISOString().replace(/[:.]/g, '-').slice(0, -5);
+			const filename = `boyfriend-camera-${timestamp}.jpg`;
+			const success = await savePhotoToGallery(photo.blob, filename);
+			if (success) {
+				showSavedToast = true;
+				setTimeout(() => showSavedToast = false, 2000);
+			}
+		} catch (err) {
+			console.error('Failed to save photo:', err);
+		} finally {
+			isSaving = false;
 		}
 	}
 
@@ -191,7 +211,21 @@
 
 			<img src={URL.createObjectURL(previewPhoto.blob)} alt="预览" class="preview-image" />
 
+			<!-- Saved toast -->
+			{#if showSavedToast}
+				<div class="saved-toast">
+					✓ 已保存到相册
+				</div>
+			{/if}
+
 			<div class="preview-actions">
+				<button
+					class="preview-save"
+					on:click={() => savePhoto(previewPhoto!)}
+					disabled={isSaving}
+				>
+					{isSaving ? '⏳ 保存中...' : '📥 保存到相册'}
+				</button>
 				<button
 					class="preview-like"
 					class:liked={previewPhoto.isUserSelected}
@@ -507,6 +541,7 @@
 		gap: 1rem;
 	}
 
+	.preview-save,
 	.preview-like {
 		padding: 0.75rem 1.5rem;
 		border-radius: 20px;
@@ -521,11 +556,52 @@
 		transition: background 0.2s;
 	}
 
+	.preview-save:active,
 	.preview-like:active {
 		background: rgba(255, 255, 255, 0.2);
 	}
 
+	.preview-save:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
 	.preview-like.liked {
 		background: rgba(255, 62, 108, 0.3);
+	}
+
+	/* Saved toast */
+	.saved-toast {
+		position: absolute;
+		top: 5rem;
+		left: 50%;
+		transform: translateX(-50%);
+		background: rgba(16, 185, 129, 0.9);
+		color: white;
+		padding: 0.75rem 1.5rem;
+		border-radius: 20px;
+		font-weight: 500;
+		animation: slideIn 0.3s ease-out, fadeOut 0.3s ease-in 1.7s forwards;
+		z-index: 100;
+	}
+
+	@keyframes slideIn {
+		from {
+			opacity: 0;
+			transform: translateX(-50%) translateY(-10px);
+		}
+		to {
+			opacity: 1;
+			transform: translateX(-50%) translateY(0);
+		}
+	}
+
+	@keyframes fadeOut {
+		from {
+			opacity: 1;
+		}
+		to {
+			opacity: 0;
+		}
 	}
 </style>
