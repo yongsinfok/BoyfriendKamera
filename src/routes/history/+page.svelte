@@ -4,6 +4,7 @@
 	import { sessionService, photoService } from '$lib/services/db';
 	import { savePhotoToGallery } from '$lib/utils/photo';
 	import type { Photo, Session } from '$lib/types';
+	import { tick } from 'svelte';
 
 	let sessions: Session[] = [];
 	let selectedSession: Session | null = null;
@@ -13,6 +14,14 @@
 	let previewIndex = 0;
 	let isSaving = false;
 	let showSavedToast = false;
+
+	// Swipe state
+	interface SwipeState {
+		sessionId: string;
+		offsetX: number;
+		isDeleting: boolean;
+	}
+	let swipeStates: Map<string, SwipeState> = new Map();
 
 	onMount(async () => {
 		await loadSessions();
@@ -132,6 +141,87 @@
 		const d = typeof date === 'string' ? new Date(date) : date;
 		return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
 	}
+
+	// Swipe handlers
+	let touchStartX = 0;
+	let currentSessionId: string | null = null;
+	let isSwiping = false;
+	let isDragging = false;
+
+	function handleTouchStart(event: TouchEvent, sessionId: string) {
+		touchStartX = event.touches[0].clientX;
+		currentSessionId = sessionId;
+		isSwiping = true;
+		isDragging = false;
+
+		// Initialize swipe state if not exists
+		if (!swipeStates.has(sessionId)) {
+			swipeStates.set(sessionId, { sessionId, offsetX: 0, isDeleting: false });
+		}
+
+		// Reset current state
+		const state = swipeStates.get(sessionId)!;
+		state.offsetX = 0;
+		state.isDeleting = false;
+		swipeStates.set(sessionId, state);
+	}
+
+	function handleTouchMove(event: TouchEvent, sessionId: string) {
+		if (!isSwiping || currentSessionId !== sessionId) return;
+
+		const currentX = event.touches[0].clientX;
+		const deltaX = currentX - touchStartX;
+
+		// Only allow left swipe
+		if (deltaX < 0) {
+			isDragging = true;
+			const maxOffset = -100;
+			const offset = Math.max(deltaX, maxOffset);
+			const state = swipeStates.get(sessionId)!;
+			state.offsetX = offset;
+			state.isDeleting = offset < -70;
+			swipeStates.set(sessionId, state);
+		}
+	}
+
+	function handleTouchEnd(event: TouchEvent, sessionId: string) {
+		if (!isSwiping || currentSessionId !== sessionId) return;
+
+		isSwiping = false;
+		const state = swipeStates.get(sessionId)!;
+
+		// If swiped far enough, show delete button, else reset
+		if (state.offsetX < -70) {
+			state.offsetX = -100;
+			state.isDeleting = true;
+		} else {
+			state.offsetX = 0;
+			state.isDeleting = false;
+		}
+		swipeStates.set(sessionId, state);
+	}
+
+	function resetSwipe(sessionId: string) {
+		const state = swipeStates.get(sessionId);
+		if (state) {
+			state.offsetX = 0;
+			state.isDeleting = false;
+			swipeStates.set(sessionId, state);
+		}
+	}
+
+	async function deleteSession(sessionId: string) {
+		await sessionService.delete(sessionId);
+		await loadSessions();
+		swipeStates.delete(sessionId);
+	}
+
+	function getSwipeState(sessionId: string): SwipeState {
+		if (!swipeStates.has(sessionId)) {
+			swipeStates.set(sessionId, { sessionId, offsetX: 0, isDeleting: false });
+		}
+		return swipeStates.get(sessionId)!;
+	}
 </script>
 
 <svelte:head>
@@ -162,13 +252,37 @@
 			<!-- Session list -->
 			<div class="session-list">
 				{#each sessions as session}
-					<div class="session-item" on:click={() => selectSession(session)}>
-						<div class="session-icon">📷</div>
-						<div class="session-info">
-							<div class="session-date">{formatDate(session.startedAt)}</div>
-							<div class="session-time">{formatTime(session.startedAt)} · {session.photos?.length || 0} 张照片</div>
+					{@const swipeState = getSwipeState(session.id)}
+					<div class="session-item-wrapper">
+						<!-- Delete button (revealed on swipe) -->
+						<button
+							class="session-delete-btn"
+							class:visible={swipeState.isDeleting}
+							on:click|stopPropagation={() => deleteSession(session.id)}
+						>
+							删除
+						</button>
+						<!-- Session item -->
+						<div
+							class="session-item"
+							style="transform: translateX({swipeState.offsetX}px)"
+							on:touchstart={(e) => handleTouchStart(e, session.id)}
+							on:touchmove={(e) => handleTouchMove(e, session.id)}
+							on:touchend={(e) => handleTouchEnd(e, session.id)}
+							on:click={() => {
+								if (!isDragging && swipeState.offsetX === 0) {
+									selectSession(session);
+								}
+								resetSwipe(session.id);
+							}}
+						>
+							<div class="session-icon">📷</div>
+							<div class="session-info">
+								<div class="session-date">{formatDate(session.startedAt)}</div>
+								<div class="session-time">{formatTime(session.startedAt)} · {session.photos?.length || 0} 张照片</div>
+							</div>
+							<div class="session-arrow">›</div>
 						</div>
-						<div class="session-arrow">›</div>
 					</div>
 				{/each}
 			</div>
@@ -334,6 +448,34 @@
 		gap: 0.5rem;
 	}
 
+	.session-item-wrapper {
+		position: relative;
+		overflow: hidden;
+		border-radius: 12px;
+	}
+
+	.session-delete-btn {
+		position: absolute;
+		top: 0;
+		right: 0;
+		bottom: 0;
+		width: 100px;
+		background: #ef4444;
+		border: none;
+		border-radius: 12px;
+		color: white;
+		font-weight: 600;
+		font-size: 1rem;
+		cursor: pointer;
+		z-index: 1;
+		transform: translateX(100%);
+		transition: transform 0.3s ease-out;
+	}
+
+	.session-delete-btn.visible {
+		transform: translateX(0);
+	}
+
 	.session-item {
 		display: flex;
 		align-items: center;
@@ -342,7 +484,10 @@
 		background: rgba(255, 255, 255, 0.05);
 		border-radius: 12px;
 		cursor: pointer;
-		transition: background 0.2s;
+		transition: background 0.2s, transform 0.1s ease-out;
+		position: relative;
+		z-index: 2;
+		touch-action: pan-y;
 	}
 
 	.session-item:active {
