@@ -72,28 +72,28 @@ export class GLMService {
 	// Real-time guidance analysis
 	async analyzeFrame(imageBase64: string, style?: string): Promise<AISuggestion> {
 		const styleHint = style ? `\n目标风格：${style}。` : '';
-		const prompt = `你是一个严格但友好的拍照助手。请诚实评估画面质量，给出具体改进建议。${styleHint}
+		const prompt = `你是一个友好的拍照助手，教完全不会拍照的人拍照。${styleHint}
 
-直接返回一个简短的拍照建议（15字以内），不要用JSON格式。
+直接告诉用户具体怎么操作！不要只说问题，要说解决方案！
 
-评分标准：
-- 构图需要符合三分法或居中
-- 光线要充足，避免过曝或欠曝
-- 背景要干净，避免杂乱
-- 角度要合适，避免奇怪的角度
+格式要求：
+- 15字以内
+- 不要用JSON格式
+- 必须是具体动作指令
 
-只有在构图、光线、背景、角度都很好时，才能以"✨"开头说"可以拍了"。
-有任何问题都要直接指出，不要客气！
+具体操作指导示例：
+- "手机往下移一点，平视拍"
+- "往后退两步，再拍"
+- "转个身，让人靠左一点"
+- "把手机举高，从上往下拍"
+- "往左边移，人别居中"
+- "找个窗户旁边拍，光线更好"
+- "蹲下来拍，人更显高"
+- "换个角度，避开后面的人"
+- "手机侧过来，横着拍"
+- "✨ 很好，就这样拍"
 
-示例：
-- "背景太乱了，换个角度"
-- "光线太暗，找个亮的地方"
-- "人太小了，走近点拍"
-- "往左移一点，别居中"
-- "角度太奇怪了，正对拍"
-- "✨ 完美！可以拍了"
-
-要诚实！画面有问题就直接说出来。`;
+只有在画面真的很完美时才说"✨ 很好，就这样拍"，否则一定要给出具体的操作指导！`;
 
 		const response = await this.call([{ role: 'user', content: prompt }], imageBase64);
 
@@ -117,8 +117,8 @@ export class GLMService {
 		}
 
 		// Determine if photo is good based on response
-		// Only trigger if it has the sparkle emoji (indicates truly good shot)
-		const isGood = cleanText.includes('✨') && cleanText.includes('可以拍了');
+		// Only trigger if it has the sparkle emoji and positive confirmation
+		const isGood = cleanText.includes('✨') && (cleanText.includes('很好') || cleanText.includes('完美') || cleanText.includes('就这样拍'));
 
 		return {
 			composition_suggestion: cleanText || '准备拍照中...',
