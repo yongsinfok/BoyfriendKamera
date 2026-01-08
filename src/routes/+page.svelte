@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { settings, currentStyle, presetStyles } from '$lib/stores/settings';
-import { isAnalyzing, aiSuggestion, currentPhotoCount, createSession, addPhotoToSession, completeSession } from '$lib/stores/camera';
+import { goto } from '$app/navigation';
+	import { isAnalyzing, aiSuggestion, createSession, addPhotoToSession } from '$lib/stores/camera';
 	import { getGLMService, captureFrame } from '$lib/services/glm';
-	import type { AISuggestion } from '$lib/types';
 
 	let videoElement: HTMLVideoElement;
 	let stream: MediaStream | null = null;
@@ -128,13 +128,13 @@ import { isAnalyzing, aiSuggestion, currentPhotoCount, createSession, addPhotoTo
 	}
 
 	function goToHistory() {
-		// TODO: navigate to history page
-		alert('历史记录功能开发中');
+		// Navigate to history page
+		goto('/history');
 	}
 
 	function goToSettings() {
-		// TODO: navigate to settings page
-		alert('设置页面开发中');
+		// Navigate to settings page
+		goto('/settings');
 	}
 
 	onMount(() => {
