@@ -76,36 +76,38 @@
 	<!-- Settings form -->
 	<div class="settings-content">
 		<div class="setting-group">
-			<div class="setting-item">
+			<div class="setting-item setting-item-vertical">
 				<div class="setting-label">
 					<label for="api-key">GLM API Key</label>
 					<span class="setting-hint">智谱AI的API密钥</span>
 				</div>
-				<div class="api-key-input-wrapper">
-					<input
-						id="api-key"
-						type={showApiKey ? 'text' : 'password'}
-						bind:value={apiKeyInput}
-						placeholder="输入你的 API Key"
-						class="setting-input"
-						disabled={isSaving}
-					/>
-					<button
-						class="toggle-visibility"
-						on:click={() => showApiKey = !showApiKey}
-						aria-label={showApiKey ? '隐藏' : '显示'}
+				<div class="api-key-section">
+					<div class="api-key-input-wrapper">
+						<input
+							id="api-key"
+							type={showApiKey ? 'text' : 'password'}
+							bind:value={apiKeyInput}
+							placeholder="输入你的 API Key"
+							class="setting-input"
+							disabled={isSaving}
+						/>
+						<button
+							class="toggle-visibility"
+							on:click={() => showApiKey = !showApiKey}
+							aria-label={showApiKey ? '隐藏' : '显示'}
+						>
+							{showApiKey ? '👁️' : '🔒'}
+						</button>
+					</div>
+					<a
+						href="https://open.bigmodel.cn/usercenter/apikeys"
+						target="_blank"
+						rel="noopener noreferrer"
+						class="get-api-link"
 					>
-						{showApiKey ? '👁️' : '🔒'}
-					</button>
+						获取 API Key →
+					</a>
 				</div>
-				<a
-					href="https://open.bigmodel.cn/usercenter/apikeys"
-					target="_blank"
-					rel="noopener noreferrer"
-					class="get-api-link"
-				>
-					获取 API Key →
-				</a>
 			</div>
 		</div>
 
@@ -216,11 +218,12 @@
 
 <style>
 	.settings-container {
-		min-height: 100vh;
+		height: 100vh;
 		background: #0a0a0a;
 		color: #fff;
 		display: flex;
 		flex-direction: column;
+		overflow: hidden;
 	}
 
 	.header {
@@ -294,6 +297,11 @@
 		gap: 1rem;
 	}
 
+	.setting-item-vertical {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
 	.setting-item:last-child {
 		border-bottom: none;
 	}
@@ -315,11 +323,17 @@
 	}
 
 	/* API Key input wrapper */
+	.api-key-section {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		width: 100%;
+	}
+
 	.api-key-input-wrapper {
 		display: flex;
 		gap: 0.5rem;
-		flex: 1;
-		min-width: 200px;
+		width: 100%;
 	}
 
 	.setting-input {
@@ -363,11 +377,12 @@
 	}
 
 	.get-api-link {
-		display: inline-block;
-		margin-top: 0.75rem;
+		display: inline-flex;
+		align-items: center;
 		color: #667eea;
 		text-decoration: none;
 		font-size: 0.85rem;
+		padding: 0.25rem 0;
 	}
 
 	.get-api-link:hover {
