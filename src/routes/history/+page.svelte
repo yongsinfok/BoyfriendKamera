@@ -29,7 +29,12 @@
 	async function toggleLike(photo: Photo) {
 		const updated = !photo.isUserSelected;
 		await photoService.update(photo.id, { isUserSelected: updated });
-		photo.isUserSelected = updated;
+		// Update the photos array reactively
+		photos = photos.map(p => p.id === photo.id ? { ...p, isUserSelected: updated } : p);
+		// Also update preview if open
+		if (previewPhoto?.id === photo.id) {
+			previewPhoto = { ...previewPhoto, isUserSelected: updated };
+		}
 	}
 
 	function openPreview(photo: Photo) {
