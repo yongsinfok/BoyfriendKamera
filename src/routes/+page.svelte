@@ -276,10 +276,12 @@
 		<!-- Rule of thirds grid (only in camera mode) -->
 		{#if enableGuideLines && !testMode}
 			<div class="grid-lines">
-				<div class="grid-line vertical"></div>
-				<div class="grid-line vertical right"></div>
-				<div class="grid-line horizontal"></div>
-				<div class="grid-line horizontal bottom"></div>
+				<!-- Vertical lines at 33.33% and 66.67% -->
+				<div class="grid-line vertical v1"></div>
+				<div class="grid-line vertical v2"></div>
+				<!-- Horizontal lines at 33.33% and 66.67% -->
+				<div class="grid-line horizontal h1"></div>
+				<div class="grid-line horizontal h2"></div>
 			</div>
 		{/if}
 
@@ -395,23 +397,30 @@
 		background: rgba(255, 255, 255, 0.3);
 	}
 
+	/* iOS-style 9-grid lines */
 	.grid-line.vertical {
 		width: 1px;
 		height: 100%;
+	}
+
+	.grid-line.vertical.v1 {
 		left: 33.33%;
 	}
 
-	.grid-line.vertical.right {
+	.grid-line.vertical.v2 {
 		left: 66.67%;
 	}
 
 	.grid-line.horizontal {
 		width: 100%;
 		height: 1px;
+	}
+
+	.grid-line.horizontal.h1 {
 		top: 33.33%;
 	}
 
-	.grid-line.horizontal.bottom {
+	.grid-line.horizontal.h2 {
 		top: 66.67%;
 	}
 
