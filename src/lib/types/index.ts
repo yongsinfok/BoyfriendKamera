@@ -135,7 +135,7 @@ export interface PresetStyle {
 	config: Record<string, unknown>;
 }
 
-export type ModelType = 'glm-4v' | 'glm-4.6v-flash';
+export type ModelType = 'glm-4.6v' | 'glm-4.6v-flash';
 
 export interface AppSettings {
 	apiKey: string;

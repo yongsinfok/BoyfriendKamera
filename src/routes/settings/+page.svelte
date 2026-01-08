@@ -170,16 +170,16 @@
 					</div>
 				</label>
 
-				<label class="model-card" class:selected={defaultModel === 'glm-4v'}>
+				<label class="model-card" class:selected={defaultModel === 'glm-4.6v'}>
 					<input
 						type="radio"
 						name="model"
-						value="glm-4v"
+						value="glm-4.6v"
 						bind:group={defaultModel}
 						disabled={isSaving}
 					/>
 					<div class="model-info">
-						<div class="model-name">GLM-4V</div>
+						<div class="model-name">GLM-4.6V</div>
 						<div class="model-desc">高质量分析，速度较慢</div>
 					</div>
 				</label>
