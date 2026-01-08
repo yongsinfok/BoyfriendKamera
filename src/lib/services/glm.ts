@@ -17,14 +17,14 @@ export interface GLMResponse {
 
 export class GLMService {
 	private apiKey: string;
-	private model: 'glm-4v' | 'glm-4.6v' | 'glm-4.6v-flash' | 'glm-4.5v';
+	private model: 'glm-4v' | 'glm-4.6v' | 'glm-4.6v-flash' | 'glm-4.6v-flashx' | 'glm-4.5v';
 
-	constructor(apiKey: string, model: 'glm-4v' | 'glm-4.6v' | 'glm-4.6v-flash' | 'glm-4.5v' = 'glm-4.6v-flash') {
+	constructor(apiKey: string, model: 'glm-4v' | 'glm-4.6v' | 'glm-4.6v-flash' | 'glm-4.6v-flashx' | 'glm-4.5v' = 'glm-4.6v-flash') {
 		this.apiKey = apiKey;
 		this.model = model;
 	}
 
-	setModel(model: 'glm-4v' | 'glm-4.6v' | 'glm-4.6v-flash' | 'glm-4.5v') {
+	setModel(model: 'glm-4v' | 'glm-4.6v' | 'glm-4.6v-flash' | 'glm-4.6v-flashx' | 'glm-4.5v') {
 		this.model = model;
 	}
 
@@ -224,7 +224,7 @@ ${photoList}
 // Singleton instance
 let glmService: GLMService | null = null;
 
-export function getGLMService(apiKey: string, model: 'glm-4v' | 'glm-4.6v' | 'glm-4.6v-flash' | 'glm-4.5v' = 'glm-4.6v-flash'): GLMService {
+export function getGLMService(apiKey: string, model: 'glm-4v' | 'glm-4.6v' | 'glm-4.6v-flash' | 'glm-4.6v-flashx' | 'glm-4.5v' = 'glm-4.6v-flash'): GLMService {
 	if (!glmService || glmService['apiKey'] !== apiKey) {
 		glmService = new GLMService(apiKey, model);
 	}

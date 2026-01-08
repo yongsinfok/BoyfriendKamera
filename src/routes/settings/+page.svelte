@@ -163,10 +163,24 @@
 					/>
 					<div class="model-info">
 						<div class="model-name">
-							GLM-4V-Flash
+							GLM-4.6V-Flash
 							<span class="model-badge recommended">推荐</span>
 						</div>
 						<div class="model-desc">快速响应，适合实时预览</div>
+					</div>
+				</label>
+
+				<label class="model-card" class:selected={defaultModel === 'glm-4.6v-flashx'}>
+					<input
+						type="radio"
+						name="model"
+						value="glm-4.6v-flashx"
+						bind:group={defaultModel}
+						disabled={isSaving}
+					/>
+					<div class="model-info">
+						<div class="model-name">GLM-4.6V-FlashX</div>
+						<div class="model-desc">极速模式，超快响应</div>
 					</div>
 				</label>
 
