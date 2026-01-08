@@ -154,15 +154,42 @@
 			const glm = getGLMService(apiKey, 'glm-4v-flash');
 			const style = $currentStyle?.name || '';
 
-			// Convert file to base64
-			const base64 = await new Promise<string>((resolve) => {
-				const reader = new FileReader();
-				reader.onload = (e) => {
-					const result = e.target?.result as string;
-					// Remove data:image/...;base64, prefix
-					resolve(result.split(',')[1]);
+			// Compress image and convert to base64
+			const base64 = await new Promise<string>((resolve, reject) => {
+				const img = new Image();
+				img.onload = () => {
+					// Create canvas to resize/compress
+					const canvas = document.createElement('canvas');
+					const ctx = canvas.getContext('2d');
+
+					// Calculate new dimensions (max 1024x1024 for GLM-4V)
+					const maxDim = 1024;
+					let width = img.width;
+					let height = img.height;
+
+					if (width > maxDim || height > maxDim) {
+						if (width > height) {
+							height = Math.round((height * maxDim) / width);
+							width = maxDim;
+						} else {
+							width = Math.round((width * maxDim) / height);
+							height = maxDim;
+						}
+					}
+
+					canvas.width = width;
+					canvas.height = height;
+
+					if (ctx) {
+						ctx.drawImage(img, 0, 0, width, height);
+						// Use JPEG quality 0.8 for compression
+						resolve(canvas.toDataURL('image/jpeg', 0.8).split(',')[1]);
+					} else {
+						reject(new Error('Failed to get canvas context'));
+					}
 				};
-				reader.readAsDataURL(file);
+				img.onerror = () => reject(new Error('Failed to load image'));
+				img.src = URL.createObjectURL(file);
 			});
 
 			const suggestion = await glm.analyzeFrame(base64, style);
@@ -174,7 +201,7 @@
 		} catch (err) {
 			console.error('AI analysis failed:', err);
 			aiSuggestion.set({
-				composition_suggestion: '分析失败，请重试',
+				composition_suggestion: `分析失败: ${err instanceof Error ? err.message : '未知错误'}`,
 				lighting_assessment: '',
 				angle_suggestion: '',
 				overall_score: 0,
