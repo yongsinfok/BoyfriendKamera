@@ -4,7 +4,97 @@
 	import { sessionService, photoService } from '$lib/services/db';
 	import { savePhotoToGallery } from '$lib/utils/photo';
 	import type { Photo, Session } from '$lib/types';
-	import { tick } from 'svelte';
+
+	// Swipe action for left swipe to reveal delete button
+	function swipeable(node: HTMLElement, params: { onDelete: () => void; onSelect: () => void }) {
+		let startX = 0;
+		let startY = 0;
+		let currentX = 0;
+		let isDragging = false;
+
+		function onTouchStart(e: TouchEvent) {
+			startX = e.touches[0].clientX;
+			startY = e.touches[0].clientY;
+			currentX = 0;
+			isDragging = false;
+			node.style.transition = 'none';
+		}
+
+		function onTouchMove(e: TouchEvent) {
+			const x = e.touches[0].clientX;
+			const y = e.touches[0].clientY;
+			const deltaX = x - startX;
+			const deltaY = y - startY;
+
+			// Only handle horizontal swipes
+			if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
+				isDragging = true;
+				e.preventDefault();
+
+				// Only allow left swipe (negative deltaX)
+				if (deltaX < 0) {
+					currentX = Math.max(deltaX, -100); // Max 100px left
+					node.style.transform = `translateX(${currentX}px)`;
+				}
+			}
+		}
+
+		function onTouchEnd() {
+			node.style.transition = 'transform 0.2s ease-out';
+
+			if (currentX < -70) {
+				// Swiped far enough - show delete button
+				currentX = -100;
+				node.style.transform = 'translateX(-100px)';
+				showDeleteButton();
+			} else {
+				// Not far enough - reset
+				currentX = 0;
+				node.style.transform = 'translateX(0px)';
+			}
+			isDragging = false;
+		}
+
+		function onClick() {
+			if (!isDragging && currentX === 0) {
+				params.onSelect();
+			}
+			// Reset on click
+			resetPosition();
+		}
+
+		function showDeleteButton() {
+			const wrapper = node.parentElement;
+			const btn = wrapper?.querySelector('.session-delete-btn') as HTMLElement;
+			if (btn) btn.classList.add('visible');
+		}
+
+		function hideDeleteButton() {
+			const wrapper = node.parentElement;
+			const btn = wrapper?.querySelector('.session-delete-btn') as HTMLElement;
+			if (btn) btn.classList.remove('visible');
+		}
+
+		function resetPosition() {
+			currentX = 0;
+			node.style.transform = 'translateX(0px)';
+			hideDeleteButton();
+		}
+
+		node.addEventListener('touchstart', onTouchStart, { passive: true });
+		node.addEventListener('touchmove', onTouchMove, { passive: false });
+		node.addEventListener('touchend', onTouchEnd, { passive: true });
+		node.addEventListener('click', onClick);
+
+		return {
+			destroy() {
+				node.removeEventListener('touchstart', onTouchStart);
+				node.removeEventListener('touchmove', onTouchMove);
+				node.removeEventListener('touchend', onTouchEnd);
+				node.removeEventListener('click', onClick);
+			}
+		};
+	}
 
 	let sessions: Session[] = [];
 	let selectedSession: Session | null = null;
@@ -14,14 +104,6 @@
 	let previewIndex = 0;
 	let isSaving = false;
 	let showSavedToast = false;
-
-	// Swipe state
-	interface SwipeState {
-		sessionId: string;
-		offsetX: number;
-		isDeleting: boolean;
-	}
-	let swipeStates: Map<string, SwipeState> = new Map();
 
 	onMount(async () => {
 		await loadSessions();
@@ -142,85 +224,9 @@
 		return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
 	}
 
-	// Swipe handlers
-	let touchStartX = 0;
-	let currentSessionId: string | null = null;
-	let isSwiping = false;
-	let isDragging = false;
-
-	function handleTouchStart(event: TouchEvent, sessionId: string) {
-		touchStartX = event.touches[0].clientX;
-		currentSessionId = sessionId;
-		isSwiping = true;
-		isDragging = false;
-
-		// Initialize swipe state if not exists
-		if (!swipeStates.has(sessionId)) {
-			swipeStates.set(sessionId, { sessionId, offsetX: 0, isDeleting: false });
-		}
-
-		// Reset current state
-		const state = swipeStates.get(sessionId)!;
-		state.offsetX = 0;
-		state.isDeleting = false;
-		swipeStates.set(sessionId, state);
-	}
-
-	function handleTouchMove(event: TouchEvent, sessionId: string) {
-		if (!isSwiping || currentSessionId !== sessionId) return;
-
-		const currentX = event.touches[0].clientX;
-		const deltaX = currentX - touchStartX;
-
-		// Only allow left swipe
-		if (deltaX < 0) {
-			isDragging = true;
-			const maxOffset = -100;
-			const offset = Math.max(deltaX, maxOffset);
-			const state = swipeStates.get(sessionId)!;
-			state.offsetX = offset;
-			state.isDeleting = offset < -70;
-			swipeStates.set(sessionId, state);
-		}
-	}
-
-	function handleTouchEnd(event: TouchEvent, sessionId: string) {
-		if (!isSwiping || currentSessionId !== sessionId) return;
-
-		isSwiping = false;
-		const state = swipeStates.get(sessionId)!;
-
-		// If swiped far enough, show delete button, else reset
-		if (state.offsetX < -70) {
-			state.offsetX = -100;
-			state.isDeleting = true;
-		} else {
-			state.offsetX = 0;
-			state.isDeleting = false;
-		}
-		swipeStates.set(sessionId, state);
-	}
-
-	function resetSwipe(sessionId: string) {
-		const state = swipeStates.get(sessionId);
-		if (state) {
-			state.offsetX = 0;
-			state.isDeleting = false;
-			swipeStates.set(sessionId, state);
-		}
-	}
-
 	async function deleteSession(sessionId: string) {
 		await sessionService.delete(sessionId);
 		await loadSessions();
-		swipeStates.delete(sessionId);
-	}
-
-	function getSwipeState(sessionId: string): SwipeState {
-		if (!swipeStates.has(sessionId)) {
-			swipeStates.set(sessionId, { sessionId, offsetX: 0, isDeleting: false });
-		}
-		return swipeStates.get(sessionId)!;
 	}
 </script>
 
@@ -252,12 +258,10 @@
 			<!-- Session list -->
 			<div class="session-list">
 				{#each sessions as session}
-					{@const swipeState = getSwipeState(session.id)}
 					<div class="session-item-wrapper">
 						<!-- Delete button (revealed on swipe) -->
 						<button
 							class="session-delete-btn"
-							class:visible={swipeState.isDeleting}
 							on:click|stopPropagation={() => deleteSession(session.id)}
 						>
 							删除
@@ -265,16 +269,7 @@
 						<!-- Session item -->
 						<div
 							class="session-item"
-							style="transform: translateX({swipeState.offsetX}px)"
-							on:touchstart={(e) => handleTouchStart(e, session.id)}
-							on:touchmove={(e) => handleTouchMove(e, session.id)}
-							on:touchend={(e) => handleTouchEnd(e, session.id)}
-							on:click={() => {
-								if (!isDragging && swipeState.offsetX === 0) {
-									selectSession(session);
-								}
-								resetSwipe(session.id);
-							}}
+							use:swipeable={{ onDelete: () => deleteSession(session.id), onSelect: () => selectSession(session) }}
 						>
 							<div class="session-icon">📷</div>
 							<div class="session-info">
@@ -487,7 +482,7 @@
 		transition: background 0.2s, transform 0.1s ease-out;
 		position: relative;
 		z-index: 2;
-		touch-action: pan-y;
+		user-select: none; /* Prevent text selection during swipe */
 	}
 
 	.session-item:active {
