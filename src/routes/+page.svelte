@@ -2,7 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { settings, currentStyle, presetStyles } from '$lib/stores/settings';
 	import { goto } from '$app/navigation';
-	import { isAnalyzing, aiSuggestion, createSession, addPhotoToSession } from '$lib/stores/camera';
+	import { isAnalyzing, aiSuggestion, createSession, addPhotoToSession, currentSession, currentPhotoCount } from '$lib/stores/camera';
 	import { getGLMService, captureFrame } from '$lib/services/glm';
 
 	let videoElement: HTMLVideoElement;
@@ -13,6 +13,9 @@
 	// Test mode for photo upload
 	let testMode = false;
 	let uploadedImage: string | null = null;
+
+	// Photo save feedback
+	let showSavedFeedback = false;
 
 	// Settings
 	let apiKey = $settings.apiKey;
@@ -115,6 +118,9 @@
 			canvas.toBlob(async (blob) => {
 				if (blob) {
 					await addPhotoToSession(blob);
+					// Show saved feedback
+					showSavedFeedback = true;
+					setTimeout(() => showSavedFeedback = false, 1500);
 				}
 				isCapturing = false;
 			}, 'image/jpeg', 0.9);
@@ -297,8 +303,17 @@
 					📷 风格
 				{/if}
 			</button>
-			<button class="history-btn" on:click={goToHistory}>📚 历史</button>
+			<button class="history-btn" on:click={goToHistory}>
+				📚 {$currentPhotoCount > 0 ? `(${$currentPhotoCount})` : ''}
+			</button>
 		</div>
+
+		<!-- Saved feedback toast -->
+		{#if showSavedFeedback}
+			<div class="saved-toast">
+				✓ 已保存到相册
+			</div>
+		{/if}
 
 		<!-- AI suggestion text -->
 		<div class="ai-suggestion">
@@ -470,6 +485,41 @@
 
 	.score-good {
 		margin-left: 0.5rem;
+	}
+
+	/* Saved feedback toast */
+	.saved-toast {
+		position: absolute;
+		top: 5rem;
+		left: 50%;
+		transform: translateX(-50%);
+		background: rgba(16, 185, 129, 0.9);
+		color: white;
+		padding: 0.75rem 1.5rem;
+		border-radius: 20px;
+		font-weight: 500;
+		animation: slideIn 0.3s ease-out, fadeOut 0.3s ease-in 1.2s forwards;
+		z-index: 100;
+	}
+
+	@keyframes slideIn {
+		from {
+			opacity: 0;
+			transform: translateX(-50%) translateY(-10px);
+		}
+		to {
+			opacity: 1;
+			transform: translateX(-50%) translateY(0);
+		}
+	}
+
+	@keyframes fadeOut {
+		from {
+			opacity: 1;
+		}
+		to {
+			opacity: 0;
+		}
 	}
 
 	.bottom-controls {
