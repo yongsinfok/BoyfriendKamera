@@ -1,9 +1,19 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { activateUpdate } from '../../hooks.client';
 
 	let showUpdateBanner = false;
 	let isReloading = false;
+
+	// Function to activate the waiting service worker
+	function activateUpdate() {
+		if ('serviceWorker' in navigator) {
+			navigator.serviceWorker.getRegistration().then((registration) => {
+				if (registration?.waiting) {
+					registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+				}
+			});
+		}
+	}
 
 	onMount(() => {
 		// Listen for service worker update available event
