@@ -17,14 +17,14 @@ export interface GLMResponse {
 
 export class GLMService {
 	private apiKey: string;
-	private model: 'glm-4v' | 'glm-4v-flash';
+	private model: 'glm-4v' | 'glm-4.6v' | 'glm-4.6v-flash' | 'glm-4.5v';
 
-	constructor(apiKey: string, model: 'glm-4v' | 'glm-4v-flash' = 'glm-4v-flash') {
+	constructor(apiKey: string, model: 'glm-4v' | 'glm-4.6v' | 'glm-4.6v-flash' | 'glm-4.5v' = 'glm-4.6v-flash') {
 		this.apiKey = apiKey;
 		this.model = model;
 	}
 
-	setModel(model: 'glm-4v' | 'glm-4v-flash') {
+	setModel(model: 'glm-4v' | 'glm-4.6v' | 'glm-4.6v-flash' | 'glm-4.5v') {
 		this.model = model;
 	}
 

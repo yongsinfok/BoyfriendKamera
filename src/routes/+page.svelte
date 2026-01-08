@@ -13,7 +13,6 @@
 	// Test mode for photo upload
 	let testMode = false;
 	let uploadedImage: string | null = null;
-	let fileInput: HTMLInputElement;
 
 	// Settings
 	let apiKey = $settings.apiKey;
@@ -76,7 +75,7 @@
 				isAnalyzing.set(true);
 				const base64Frame = captureFrame(videoElement, 0.5);
 
-				const glm = getGLMService(apiKey, 'glm-4v-flash');
+				const glm = getGLMService(apiKey, 'glm-4.6v-flash');
 				const style = $currentStyle?.name || '';
 				const suggestion = await glm.analyzeFrame(base64Frame, style);
 
@@ -151,7 +150,7 @@
 
 		isAnalyzing.set(true);
 		try {
-			const glm = getGLMService(apiKey, 'glm-4v-flash');
+			const glm = getGLMService(apiKey, 'glm-4.6v-flash');
 			const style = $currentStyle?.name || '';
 
 			// Compress image and convert to base64
@@ -328,7 +327,6 @@
 					<input
 						type="file"
 						accept="image/*"
-						bind:this={fileInput}
 						on:change={handleFileUpload}
 						hidden
 					>
