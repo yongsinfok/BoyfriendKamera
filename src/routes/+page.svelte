@@ -7,6 +7,7 @@
 	import PoseSkeleton from '$lib/components/PoseSkeleton.svelte';
 	import PoseConfidenceIndicator from '$lib/components/PoseConfidenceIndicator.svelte';
 	import PoseDifferenceVisualizer from '$lib/components/PoseDifferenceVisualizer.svelte';
+	import PerformanceMetrics from '$lib/components/PerformanceMetrics.svelte';
 
 	let videoElement: HTMLVideoElement;
 	let stream: MediaStream | null = null;
@@ -546,6 +547,9 @@
 			<button class="settings-btn-small" on:click={goToSettings} aria-label="设置">⚙️</button>
 		</div>
 	</div>
+
+	<!-- Performance metrics dashboard -->
+	<PerformanceMetrics visible={true} position="top-right" />
 </div>
 
 <style>
