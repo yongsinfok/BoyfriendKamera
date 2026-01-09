@@ -21,7 +21,20 @@
 	let mostCommonError = $state<string | null>(null);
 
 	let updateInterval: ReturnType<typeof setInterval>;
-	let isVisible = $state(visible);
+
+	// Load visibility from localStorage first, then use prop as default
+	let isVisible = $state(
+		typeof window !== 'undefined'
+			? localStorage.getItem('metrics_visible') !== 'false'
+			: visible
+	);
+
+	// Save visibility to localStorage whenever it changes
+	$effect(() => {
+		if (typeof window !== 'undefined') {
+			localStorage.setItem('metrics_visible', String(isVisible));
+		}
+	});
 
 	// Position classes
 	const positionClasses: Record<typeof position, string> = {
