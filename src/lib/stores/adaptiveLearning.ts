@@ -228,6 +228,38 @@ function createAdaptiveLearningStore() {
 		}
 	};
 
+	// Convenience method to record a successful pose
+	const recordSuccessfulPose = (poseId: string) => {
+		update((state) => {
+			if (!state.learningEnabled) return state;
+			const updatedWeights = { ...state.weights };
+			if (!updatedWeights.successfulPoses.includes(poseId)) {
+				updatedWeights.successfulPoses.push(poseId);
+			}
+			// Remove from avoided if it was there
+			updatedWeights.avoidedPoses = updatedWeights.avoidedPoses.filter((id) => id !== poseId);
+			const updatedState = { ...state, weights: updatedWeights };
+			saveToStorage(updatedState);
+			return updatedState;
+		});
+	};
+
+	// Convenience method to record an avoided pose
+	const recordAvoidedPose = (poseId: string) => {
+		update((state) => {
+			if (!state.learningEnabled) return state;
+			const updatedWeights = { ...state.weights };
+			if (!updatedWeights.avoidedPoses.includes(poseId)) {
+				updatedWeights.avoidedPoses.push(poseId);
+			}
+			// Remove from successful if it was there
+			updatedWeights.successfulPoses = updatedWeights.successfulPoses.filter((id) => id !== poseId);
+			const updatedState = { ...state, weights: updatedWeights };
+			saveToStorage(updatedState);
+			return updatedState;
+		});
+	};
+
 	// Initialize
 	loadFromStorage();
 
@@ -240,6 +272,8 @@ function createAdaptiveLearningStore() {
 		updatePreferredDifficulties,
 		getStatistics,
 		reset,
+		recordSuccessfulPose,
+		recordAvoidedPose,
 		set
 	};
 }
