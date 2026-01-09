@@ -17,12 +17,6 @@
 	// Camera modes (iOS style)
 	type CameraMode = 'photo' | 'video' | 'portrait' | 'square' | 'pano';
 	let currentMode: CameraMode = 'photo';
-	let cameraModes: { id: CameraMode; label: string; icon: string }[] = [
-		{ id: 'video', label: '视频', icon: '🎥' },
-		{ id: 'photo', label: '照片', icon: '📷' },
-		{ id: 'square', label: '方形', icon: '⬜' },
-		{ id: 'portrait', label: '人像', icon: '👤' }
-	];
 
 	// Flash modes
 	type FlashMode = 'auto' | 'on' | 'off';
@@ -515,62 +509,63 @@
 		</div>
 	{/if}
 
-	<!-- Top toolbar -->
+	<!-- Top toolbar (iOS style) -->
 	<div class="top-toolbar">
-		<!-- Flash button -->
-		<button class="tool-btn" on:click={cycleFlash} aria-label="闪光灯">
-			<span class="tool-icon">
-				{#if flashMode === 'auto'}
-					⚡
-				{:else if flashMode === 'on'}
-					⚡
-				{:else}
-					⚡
+		<!-- Left: Flash and Timer -->
+		<div class="top-left-tools">
+			<button class="top-tool-btn" on:click={cycleFlash} aria-label="闪光灯">
+				<span class="top-icon flash-icon" class:flash-auto={flashMode === 'auto'} class:flash-on={flashMode === 'on'} class:flash-off={flashMode === 'off'}></span>
+			</button>
+			<button class="top-tool-btn" on:click={cycleTimer} aria-label="定时器">
+				<span class="top-icon timer-icon"></span>
+				{#if timerSeconds > 0}
+					<span class="top-icon-label">{timerSeconds}</span>
 				{/if}
-			</span>
-			<span class="tool-label">{flashMode === 'auto' ? '自动' : flashMode === 'on' ? '开启' : '关闭'}</span>
-		</button>
+			</button>
+		</div>
 
-		<!-- HDR button -->
-		<button class="tool-btn" class:active={hdrEnabled} on:click={toggleHDR} aria-label="HDR">
-			<span class="tool-icon">HDR</span>
-		</button>
-
-		<!-- Live Photo -->
-		<button class="tool-btn live-photo" class:active={livePhotoEnabled} on:click={toggleLivePhoto} aria-label="实况">
-			<span class="tool-icon">{livePhotoEnabled ? '🔵' : '⭕'}</span>
-			<span class="live-photo-rings"></span>
-		</button>
-
-		<!-- Timer -->
-		<button class="tool-btn" class:active={timerSeconds > 0} on:click={cycleTimer} aria-label="定时器">
-			<span class="tool-icon">⏱</span>
-			<span class="tool-label">{timerSeconds > 0 ? timerSeconds + 's' : ''}</span>
-		</button>
-
-		<!-- Camera switch -->
-		<button class="camera-switch" on:click={switchCamera} aria-label="切换摄像头">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<path d="M20 4h-3.17L15 2H9L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-5 11.5V13c1.25 0 2.45-.2 3.57-.57a1.02 1.02 0 0 0-.7-1.3c-.95.32-1.93.5-2.87.5V8c0-.55-.45-1-1-1s-1 .45-1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6c0-1.65 1.35-3 3-3s3 1.35 3 3v6c0 1.65-1.35 3-3 3s-3-1.35-3-3V9.5c-2 0-3.92-.5-5.71-1.43a1 1 0 0 0-.7 1.3c1.92 1 4.12 1.43 6.41 1.43z"/>
+		<!-- Center: Camera switch -->
+		<button class="top-camera-switch" on:click={switchCamera} aria-label="切换摄像头">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+				<path d="M12 4v1m0 14v1m8-8h-1M5 12H4m12.4-6.4l-.7.7M7.3 16.3l-.7.7M16.3 16.3l-.7-.7M7.3 7.3l-.7-.7"/>
+				<circle cx="12" cy="12" r="3"/>
 			</svg>
+		</button>
+
+		<!-- Right: HEIF quality indicator -->
+		<button class="top-heif-btn" aria-label="HEIF 高质量">
+			HEIF
+			<span class="heif-label">高</span>
 		</button>
 	</div>
 
-	<!-- Mode selector (bottom) -->
-	<div class="mode-selector">
-		{#each cameraModes as mode}
-			<button
-				class="mode-btn"
-				class:active={currentMode === mode.id}
-				on:click={() => currentMode = mode.id}
-				aria-label={mode.label}
-			>
-				<span class="mode-icon">{mode.icon}</span>
-				{#if currentMode === mode.id}
-					<span class="mode-label">{mode.label}</span>
-				{/if}
-			</button>
-		{/each}
+	<!-- Mode selector (bottom) - iOS style -->
+	<div class="mode-selector-ios">
+		<button
+			class="mode-tab-ios"
+			class:active={currentMode === 'video'}
+			on:click={() => currentMode = 'video'}
+		>视频</button>
+		<button
+			class="mode-tab-ios"
+			class:active={currentMode === 'photo'}
+			on:click={() => currentMode = 'photo'}
+		>照片</button>
+		<button
+			class="mode-tab-ios"
+			class:active={currentMode === 'square'}
+			on:click={() => currentMode = 'square'}
+		>拍照</button>
+		<button
+			class="mode-tab-ios"
+			class:active={currentMode === 'portrait'}
+			on:click={() => currentMode = 'portrait'}
+		>人像</button>
+		<button
+			class="mode-tab-ios"
+			class:active={currentMode === 'pano'}
+			on:click={() => currentMode = 'pano'}
+		>全景</button>
 	</div>
 
 	<!-- Shutter button (center bottom) -->
@@ -747,7 +742,7 @@
 		100% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
 	}
 
-	/* Top toolbar */
+	/* Top toolbar - iOS style */
 	.top-toolbar {
 		position: absolute;
 		top: 0;
@@ -756,70 +751,136 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		padding: 12px 20px;
-		background: linear-gradient(to bottom, rgba(0, 0, 0, 0.6), transparent);
+		padding: 16px 20px;
+		background: rgba(0, 0, 0, 0.85);
 		z-index: 100;
 	}
 
-	.tool-btn {
+	/* Left tools container */
+	.top-left-tools {
+		display: flex;
+		gap: 12px;
+		align-items: center;
+	}
+
+	.top-tool-btn {
+		width: 36px;
+		height: 36px;
+		background: transparent;
+		border: none;
+		cursor: pointer;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 2px;
-		background: transparent;
-		border: none;
-		color: white;
-		padding: 8px 12px;
-		border-radius: 8px;
-		cursor: pointer;
-		transition: background 0.2s;
-		min-width: 44px;
+		justify-content: center;
+		position: relative;
 	}
 
-	.tool-btn:active {
-		background: rgba(255, 255, 255, 0.1);
+	.top-icon {
+		width: 20px;
+		height: 20px;
+		display: block;
 	}
 
-	.tool-btn.active {
+	/* Flash icon styles */
+	.flash-icon {
+		background: none;
+		position: relative;
+	}
+
+	.flash-icon::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		background-size: contain;
+		background-repeat: no-repeat;
+		background-position: center;
+	}
+
+	/* Auto flash - white lightning bolt with outline */
+	.flash-auto {
+		color: rgba(255, 255, 255, 0.8);
+	}
+
+	.flash-auto::after {
+		content: '⚡';
+		font-size: 18px;
+	}
+
+	/* On flash - yellow lightning bolt */
+	.flash-on {
 		color: #FFCC00;
 	}
 
-	.tool-icon {
+	.flash-on::after {
+		content: '⚡';
 		font-size: 18px;
-		line-height: 1;
 	}
 
-	.tool-label {
-		font-size: 10px;
-		color: rgba(255, 255, 255, 0.6);
-		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+	/* Off flash - yellow lightning bolt with slash */
+	.flash-off {
+		color: #FFCC00;
 	}
 
-	/* Live Photo special styling */
-	.live-photo .live-photo-rings {
+	.flash-off::after {
+		content: '⚡';
+		font-size: 18px;
+		position: relative;
+	}
+
+	.flash-off::before {
+		content: '';
 		position: absolute;
-		width: 28px;
-		height: 28px;
-		border: 2px solid rgba(255, 255, 255, 0.3);
+		width: 16px;
+		height: 2px;
+		background: #FFCC00;
+		transform: rotate(45deg);
+		top: 50%;
+		left: 50%;
+		margin-left: -8px;
+		margin-top: -1px;
+	}
+
+	/* Timer icon */
+	.timer-icon::after {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 20px;
+		height: 20px;
+		border: 2px solid rgba(255, 255, 255, 0.8);
 		border-radius: 50%;
-		animation: none;
 	}
 
-	.live-photo.active .live-photo-rings {
-		border-color: rgba(255, 204, 0, 0.6);
-		animation: livePhotoPulse 2s ease-in-out infinite;
+	.timer-icon::before {
+		content: '';
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		width: 8px;
+		height: 2px;
+		background: rgba(255, 255, 255, 0.8);
+		transform-origin: left center;
+		transform: translateY(-50%) rotate(0deg);
 	}
 
-	@keyframes livePhotoPulse {
-		0%, 100% { transform: scale(1); opacity: 0.6; }
-		50% { transform: scale(1.3); opacity: 0; }
+	.top-icon-label {
+		position: absolute;
+		bottom: -4px;
+		font-size: 10px;
+		font-weight: 600;
+		color: rgba(255, 255, 255, 0.9);
 	}
 
-	/* Camera switch button */
-	.camera-switch {
-		width: 44px;
-		height: 44px;
-		background: rgba(255, 255, 255, 0.1);
+	/* Center camera switch */
+	.top-camera-switch {
+		width: 40px;
+		height: 40px;
+		background: rgba(255, 255, 255, 0.15);
 		border: 2px solid rgba(255, 255, 255, 0.3);
 		border-radius: 50%;
 		display: flex;
@@ -829,60 +890,83 @@
 		transition: all 0.2s;
 	}
 
-	.camera-switch:active {
-		background: rgba(255, 255, 255, 0.2);
+	.top-camera-switch:active {
 		transform: scale(0.95);
 	}
 
-	.camera-switch svg {
+	.top-camera-switch svg {
 		width: 20px;
 		height: 20px;
-		color: white;
+		color: rgba(255, 255, 255, 0.9);
 	}
 
-	/* Mode selector */
-	.mode-selector {
+	/* HEIF button */
+	.top-heif-btn {
+		background: rgba(255, 59, 48, 0.9);
+		color: white;
+		border: none;
+		border-radius: 18px;
+		padding: 6px 12px;
+		font-size: 12px;
+		font-weight: 600;
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		cursor: pointer;
+	}
+
+	.heif-label {
+		background: rgba(255, 255, 255, 0.2);
+		padding: 2px 6px;
+		border-radius: 8px;
+		font-size: 11px;
+	}
+
+	/* Mode selector - iOS style */
+	.mode-selector-ios {
 		position: absolute;
-		bottom: 60px;
+		bottom: 130px;
 		left: 0;
 		right: 0;
 		display: flex;
 		justify-content: center;
 		align-items: center;
-		gap: 8px;
-		padding: 0 20px;
+		gap: 4px;
+		padding: 0 16px;
 		z-index: 100;
 	}
 
-	.mode-btn {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 4px;
+	.mode-tab-ios {
 		background: transparent;
 		border: none;
 		color: rgba(255, 255, 255, 0.5);
-		padding: 8px 16px;
+		font-size: 13px;
+		font-weight: 500;
+		padding: 8px 12px;
 		cursor: pointer;
-		transition: all 0.2s;
+		transition: color 0.2s;
+		position: relative;
 	}
 
-	.mode-btn.active {
+	.mode-tab-ios.active {
 		color: #FFCC00;
-	}
-
-	.mode-btn:active {
-		transform: scale(0.95);
-	}
-
-	.mode-icon {
-		font-size: 22px;
-	}
-
-	.mode-label {
-		font-size: 10px;
 		font-weight: 600;
-		white-space: nowrap;
+	}
+
+	.mode-tab-ios.active::after {
+		content: '';
+		position: absolute;
+		bottom: 0;
+		left: 50%;
+		transform: translateX(-50%);
+		width: 4px;
+		height: 4px;
+		background: #FFCC00;
+		border-radius: 50%;
+	}
+
+	.mode-tab-ios:active {
+		transform: scale(0.95);
 	}
 
 	/* Shutter container */
