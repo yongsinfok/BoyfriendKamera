@@ -1,6 +1,14 @@
 import type { AISuggestion, PhotoAnalysis, StyleProfile, GuideLine, Pose, PoseKeypoint } from '$lib/types';
 import { POSE_TEMPLATES } from '$lib/data/poseTemplates';
 import { calculatePoseMatchScore, calculatePoseSymmetry, detectPoseIssues, calculatePoseDifficulty } from '$lib/utils/poseMatching';
+import {
+	analysisCache,
+	requestQueue,
+	performanceMonitor,
+	generatePoseCacheKey,
+	debounce,
+	optimizeImageForAnalysis
+} from '$lib/utils/performanceOptimizer';
 
 const GLM_API_BASE = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
 
@@ -246,8 +254,20 @@ export class GLMService {
 
 	// AI Pose Coach - Analyze frame and return pose guidance
 	async analyzePose(imageBase64: string, style?: string): Promise<AISuggestion> {
-		const styleHint = style ? `\n目标风格：${style}。根据这种风格的特点调整姿势建议。` : '';
-		const prompt = `你是一个世界级的专业拍照姿势教练和摄影指导，拥有20年摄影指导经验。${styleHint}
+		const startTime = performance.now();
+
+		// Check cache first
+		const cacheKey = generatePoseCacheKey({ imageBase64: imageBase64.slice(0, 100), style }); // Cache by partial image data
+		const cachedResult = analysisCache.get(cacheKey);
+		if (cachedResult) {
+			performanceMonitor.record('analyzePose_cache_hit', performance.now() - startTime);
+			return cachedResult;
+		}
+
+		// Use request queue to prevent overwhelming the API
+		return requestQueue.add(async () => {
+			const styleHint = style ? `\n目标风格：${style}。根据这种风格的特点调整姿势建议。` : '';
+			const prompt = `你是一个世界级的专业拍照姿势教练和摄影指导，拥有20年摄影指导经验。${styleHint}
 
 **核心任务：精确分析当前画面，生成完美的目标姿势骨架**
 
@@ -550,7 +570,7 @@ export class GLMService {
 		const normalizedScore = Math.min(1, Math.max(0, score / 100));
 		const isGood = score >= 85 && confidence >= 0.7;
 
-		return {
+		const result: AISuggestion = {
 			composition_suggestion: suggestionText,
 			lighting_assessment: '',
 			angle_suggestion: '',
@@ -559,7 +579,15 @@ export class GLMService {
 			pose_guide: poseGuide,
 			voice_instruction: instructions.join('，')
 		};
-	}
+
+		// Cache the result
+		analysisCache.set(cacheKey, result);
+
+		// Record performance metric
+		performanceMonitor.record('analyzePose', performance.now() - startTime);
+
+		return result;
+		});
 
 	// Validate and normalize pose coordinates
 	private validatePoseCoordinates(pose: any): any {
