@@ -374,6 +374,15 @@
 				<!-- Horizontal lines at 33.33% and 66.67% -->
 				<div class="grid-line horizontal h1"></div>
 				<div class="grid-line horizontal h2"></div>
+
+				<!-- Position indicator circle from AI -->
+				{#if $aiSuggestion?.guide_lines && $aiSuggestion.guide_lines.length > 0}
+					{#each $aiSuggestion.guide_lines as guide}
+						{#if guide.type === 'standing_position' && guide.x !== undefined && guide.y !== undefined}
+							<div class="position-indicator" style="left: {guide.x * 100}%; top: {guide.y * 100}%;"></div>
+						{/if}
+					{/each}
+				{/if}
 			</div>
 		{/if}
 
@@ -526,6 +535,31 @@
 
 	.grid-line.horizontal.h2 {
 		top: 66.67%;
+	}
+
+	/* Position indicator circle */
+	.position-indicator {
+		position: absolute;
+		width: 60px;
+		height: 60px;
+		transform: translate(-50%, -50%);
+		border: 3px solid rgba(255, 215, 0, 0.8);
+		border-radius: 50%;
+		background: rgba(255, 215, 0, 0.1);
+		box-shadow: 0 0 20px rgba(255, 215, 0, 0.5), inset 0 0 10px rgba(255, 215, 0, 0.3);
+		animation: pulse 2s ease-in-out infinite;
+		pointer-events: none;
+	}
+
+	@keyframes pulse {
+		0%, 100% {
+			transform: translate(-50%, -50%) scale(1);
+			opacity: 0.8;
+		}
+		50% {
+			transform: translate(-50%, -50%) scale(1.1);
+			opacity: 1;
+		}
 	}
 
 	.top-bar {

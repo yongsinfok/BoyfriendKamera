@@ -87,17 +87,35 @@ export class GLMService {
 - 不要敷衍地说"很好"，除非构图真的完美
 - 建议要具体："往左移一步" 比 "调整位置" 更好
 - 15字以内
+- **必须同时返回九宫格位置建议！**
 
 示例：
-- "往左移一步，现在太靠右"
-- "往下蹲一点，角度会更好"
-- "光线太暗，找个亮点的位置"
-- "退后一步，人太小了"
-- "稍微抬头，避免双下巴"
-- "背景太乱，换个方向拍"
-- "现在逆光了，转到侧面"
-- "手机拿高一点，俯拍更瘦"
-- "✨ 这个角度完美，拍吧"（只在真的很好时）
+- "往左移一步，现在太靠右" + 位置 "right-middle"
+- "往下蹲一点，角度会更好" + 位置 "center"
+- "光线太暗，找个亮点的位置" + 位置 "center"
+- "退后一步，人太小了" + 位置 "center"
+- "稍微抬头，避免双下巴" + 位置 "center-top"
+- "背景太乱，换个方向拍" + 位置 "left-middle"
+- "现在逆光了，转到侧面" + 位置 "right-bottom"
+- "手机拿高一点，俯拍更瘦" + 位置 "center-bottom"
+- "✨ 这个角度完美，拍吧" + 位置 "center"（只在真的很好时）
+
+**必须以JSON格式返回：**
+{
+  "suggestion": "具体的拍照建议（15字以内）",
+  "grid_position": "九宫格位置，用以下值之一：center-top, center, center-bottom, left-top, left-middle, left-bottom, right-top, right-middle, right-bottom"
+}
+
+九宫格位置说明：
+- center: 正中心
+- center-top: 上方中间
+- center-bottom: 下方中间
+- left-top: 左上角
+- left-middle: 左侧中间
+- left-bottom: 左下角
+- right-top: 右上角
+- right-middle: 右侧中间
+- right-bottom: 右下角
 
 **用户需要的是具体指导，不是敷衍的鼓励！给出有价值的建议！**`;
 
@@ -116,22 +134,65 @@ export class GLMService {
 			.replace(/^(composition_suggestion|suggestion|text)[:：]\s*/i, '')
 			.trim();
 
-		// Check if response contains JSON and extract value if so
-		const jsonMatch = cleanText.match(/"composition_suggestion"\s*:\s*"([^"]+)"/);
-		if (jsonMatch) {
-			cleanText = jsonMatch[1];
+		// Try to parse JSON response
+		let suggestionText = cleanText;
+		let gridPosition = 'center'; // Default position
+		let guideLines: { type: string; x?: number; y?: number }[] = [];
+
+		try {
+			// First try to match JSON in the response
+			const jsonMatch = cleanText.match(/\{[^}]*"suggestion"[^}]*"grid_position"[^}]*\}/);
+			if (jsonMatch) {
+				const parsed = JSON.parse(jsonMatch[0]);
+				suggestionText = parsed.suggestion || suggestionText;
+				gridPosition = parsed.grid_position || 'center';
+			} else {
+				// Try to parse the entire response as JSON
+				const parsed = JSON.parse(cleanText);
+				suggestionText = parsed.suggestion || parsed.composition_suggestion || suggestionText;
+				gridPosition = parsed.grid_position || 'center';
+			}
+		} catch {
+			// If JSON parsing fails, use the text as is
+			// Check if response contains old format JSON and extract value if so
+			const oldJsonMatch = cleanText.match(/"composition_suggestion"\\s*:\\s*"([^"]+)"/);
+			if (oldJsonMatch) {
+				suggestionText = oldJsonMatch[1];
+			}
 		}
+
+		// Convert grid position to guide lines
+		// Grid is 3x3, so positions are at: 0.167, 0.5, 0.833 for rows and cols
+		const positionMap: Record<string, { x: number; y: number }> = {
+			'center': { x: 0.5, y: 0.5 },
+			'center-top': { x: 0.5, y: 0.167 },
+			'center-bottom': { x: 0.5, y: 0.833 },
+			'left-top': { x: 0.167, y: 0.167 },
+			'left-middle': { x: 0.167, y: 0.5 },
+			'left-bottom': { x: 0.167, y: 0.833 },
+			'right-top': { x: 0.833, y: 0.167 },
+			'right-middle': { x: 0.833, y: 0.5 },
+			'right-bottom': { x: 0.833, y: 0.833 }
+		};
+
+		const pos = positionMap[gridPosition] || positionMap['center'];
+		guideLines = [{
+			type: 'standing_position',
+			x: pos.x,
+			y: pos.y
+		}];
 
 		// Determine if photo is good based on response
 		// More lenient: just having ✨ or positive words is enough
-		const isGood = cleanText.includes('✨') || cleanText.includes('很好') || cleanText.includes('不错') || cleanText.includes('可以了') || cleanText.includes('拍吧');
+		const isGood = suggestionText.includes('✨') || suggestionText.includes('很好') || suggestionText.includes('不错') || suggestionText.includes('可以了') || suggestionText.includes('拍吧');
 
 		return {
-			composition_suggestion: cleanText || '准备拍照中...',
+			composition_suggestion: suggestionText || '准备拍照中...',
 			lighting_assessment: '',
 			angle_suggestion: '',
 			overall_score: isGood ? 0.85 : 0.6,
-			should_vibrate: isGood
+			should_vibrate: isGood,
+			guide_lines: guideLines
 		};
 	}
 
