@@ -489,136 +489,130 @@ export class GLMService {
 			.replace(/\n+/g, ' ')
 			.trim();
 
-		// Try to parse enhanced JSON response
-		let suggestionText = 'AI正在分析姿势...';
-		let confidence = 0.7;
-		let score = 60;
-		let targetPose: any = {};
+		// Parse JSON response
+		const parsed = JSON.parse(cleanText);
+		let suggestionText = parsed.suggestion || 'AI正在分析姿势...';
+		let confidence = parsed.confidence ?? 0.7;
+		let score = parsed.score ?? 60;
+		let targetPose = parsed.target_pose || {};
 		let instructions: string[] = [];
 		let poseGuide: any = null;
 
-		try {
-			const parsed = JSON.parse(cleanText);
-			suggestionText = parsed.suggestion || suggestionText;
-			confidence = parsed.confidence ?? 0.7;
-			score = parsed.score ?? 60;
-			targetPose = parsed.target_pose || {};
+		// Enhanced instruction parsing from adjustments array
+		if (parsed.adjustments && Array.isArray(parsed.adjustments)) {
+			// Sort by urgency if available
+			const sortedAdjustments = parsed.adjustments.sort((a: any, b: any) => {
+				const urgencyOrder = { high: 0, medium: 1, low: 2 };
+				const urgencyA = a.urgency || 'low';
+				const urgencyB = b.urgency || 'low';
+				return urgencyOrder[urgencyA as keyof typeof urgencyOrder] -
+				       urgencyOrder[urgencyB as keyof typeof urgencyOrder];
+			});
 
-			// Enhanced instruction parsing from adjustments array
-			if (parsed.adjustments && Array.isArray(parsed.adjustments)) {
-				// Sort by urgency if available
-				const sortedAdjustments = parsed.adjustments.sort((a: any, b: any) => {
-					const urgencyOrder = { high: 0, medium: 1, low: 2 };
-					const urgencyA = a.urgency || 'low';
-					const urgencyB = b.urgency || 'low';
-					return urgencyOrder[urgencyA as keyof typeof urgencyOrder] -
-					       urgencyOrder[urgencyB as keyof typeof urgencyOrder];
-				});
+			instructions = sortedAdjustments.map((adj: any, index: number) => {
+				const urgencyEmoji = adj.urgency === 'high' ? '🔴' :
+				                    adj.urgency === 'medium' ? '🟡' : '🟢';
+				return `${urgencyEmoji} ${adj.body_part}${adj.action}`;
+			});
+		}
 
-				instructions = sortedAdjustments.map((adj: any, index: number) => {
-					const urgencyEmoji = adj.urgency === 'high' ? '🔴' :
-					                    adj.urgency === 'medium' ? '🟡' : '🟢';
-					return `${urgencyEmoji} ${adj.body_part}${adj.action}`;
-				});
-			}
+		// Add step-by-step instructions if available
+		if (parsed.step_by_step && Array.isArray(parsed.step_by_step)) {
+			const stepInstructions = parsed.step_by_step.map((step: string, i: number) =>
+				`📋 ${i + 1}. ${step}`
+			);
+			instructions = [...stepInstructions, ...instructions];
+		}
 
-			// Add step-by-step instructions if available
-			if (parsed.step_by_step && Array.isArray(parsed.step_by_step)) {
-				const stepInstructions = parsed.step_by_step.map((step: string, i: number) =>
-					`📋 ${i + 1}. ${step}`
-				);
-				instructions = [...stepInstructions, ...instructions];
-			}
+		// Add common mistake warning if available
+		if (parsed.common_mistake && parsed.common_mistake.mistake) {
+			instructions.push(`⚠️ 常见错误：${parsed.common_mistake.mistake} → ${parsed.common_mistake.correction}`);
+		}
 
-			// Add common mistake warning if available
-			if (parsed.common_mistake && parsed.common_mistake.mistake) {
-				instructions.push(`⚠️ 常见错误：${parsed.common_mistake.mistake} → ${parsed.common_mistake.correction}`);
-			}
+		// Validate pose coordinates
+		targetPose = this.validatePoseCoordinates(targetPose);
 
-			// Validate pose coordinates
-			targetPose = this.validatePoseCoordinates(targetPose);
-
-			// Apply pose smoothing to reduce jitter
-			if (Object.keys(targetPose).length > 0) {
-				const smoothingConfig: SmoothingConfig = {
-					emaFactor: 0.4, // Moderate smoothing
-					minConfidence: 0.3,
-					maxChange: 0.15,
-					outlierThreshold: 2.5,
-					enableKalman: true,
-					processNoise: 0.01,
-					measurementNoise: 0.08
-				};
-				const smoother = getPoseSmoother(smoothingConfig);
-				targetPose = smoother.smoothPose(targetPose, 1.0);
-			}
-
-			// Enhanced pose analysis using matching utilities
-			const symmetry = calculatePoseSymmetry(targetPose);
-			const issues = detectPoseIssues(targetPose);
-			const difficulty = calculatePoseDifficulty(targetPose);
-
-			// Add symmetry feedback if significant asymmetry detected
-			if (symmetry.symmetryScore < 80) {
-				instructions.push(`⚖️ 对称度：${symmetry.symmetryScore}% - 调整${symmetry.asymmetricalParts.join('、')}使其更对称`);
-			}
-
-			// Add detected issues if any
-			for (const issue of issues.slice(0, 3)) { // Limit to top 3 issues
-				const severityEmoji = issue.severity === 'high' ? '🔴' :
-				                      issue.severity === 'medium' ? '🟡' : '🟢';
-				instructions.push(`${severityEmoji} ${issue.issue}：${issue.suggestion}`);
-			}
-
-			// Create enhanced pose guide object
-			if (Object.keys(targetPose).length > 0) {
-				poseGuide = {
-					target_pose: targetPose,
-					current_pose: parsed.current_pose_analysis,
-					instructions: instructions,
-					confidence: confidence,
-					difficulty: difficulty.difficulty,
-					common_mistake: parsed.common_mistake,
-					step_by_step: parsed.step_by_step,
-					symmetry_score: symmetry.symmetryScore,
-					detected_issues: issues
-				};
-			}
-
-			const normalizedScore = Math.min(1, Math.max(0, score / 100));
-			const isGood = score >= 85 && confidence >= 0.7;
-
-			const result: AISuggestion = {
-				composition_suggestion: suggestionText,
-				lighting_assessment: '',
-				angle_suggestion: '',
-				overall_score: normalizedScore,
-				should_vibrate: isGood,
-				pose_guide: poseGuide,
-				voice_instruction: instructions.join('，')
+		// Apply pose smoothing to reduce jitter
+		if (Object.keys(targetPose).length > 0) {
+			const smoothingConfig: SmoothingConfig = {
+				emaFactor: 0.4, // Moderate smoothing
+				minConfidence: 0.3,
+				maxChange: 0.15,
+				outlierThreshold: 2.5,
+				enableKalman: true,
+				processNoise: 0.01,
+				measurementNoise: 0.08
 			};
+			const smoother = getPoseSmoother(smoothingConfig);
+			targetPose = smoother.smoothPose(targetPose, 1.0);
+		}
 
-			// Cache the result
-			analysisCache.set(cacheKey, result);
+		// Enhanced pose analysis using matching utilities
+		const symmetry = calculatePoseSymmetry(targetPose);
+		const issues = detectPoseIssues(targetPose);
+		const difficulty = calculatePoseDifficulty(targetPose);
 
-			// Record performance metric
-			performanceMonitor.record('analyzePose', performance.now() - startTime);
+		// Add symmetry feedback if significant asymmetry detected
+		if (symmetry.symmetryScore < 80) {
+			instructions.push(`⚖️ 对称度：${symmetry.symmetryScore}% - 调整${symmetry.asymmetricalParts.join('、')}使其更对称`);
+		}
 
-			return result;
-			} catch (error) {
-				// Classify and track the error
-				const appError = classifyError(error);
-				errorTracker.track(appError);
+		// Add detected issues if any
+		for (const issue of issues.slice(0, 3)) { // Limit to top 3 issues
+			const severityEmoji = issue.severity === 'high' ? '🔴' :
+			                      issue.severity === 'medium' ? '🟡' : '🟢';
+			instructions.push(`${severityEmoji} ${issue.issue}：${issue.suggestion}`);
+		}
 
-				// Try to recover or use fallback
-				const fallback = await recoverFromError(appError, {
-					retryCount: 0,
-					maxRetries: 2,
-					lastSuccess: null
-				});
+		// Create enhanced pose guide object
+		if (Object.keys(targetPose).length > 0) {
+			poseGuide = {
+				target_pose: targetPose,
+				current_pose: parsed.current_pose_analysis,
+				instructions: instructions,
+				confidence: confidence,
+				difficulty: difficulty.difficulty,
+				common_mistake: parsed.common_mistake,
+				step_by_step: parsed.step_by_step,
+				symmetry_score: symmetry.symmetryScore,
+				detected_issues: issues
+			};
+		}
 
-				return fallback;
-			}
+		const normalizedScore = Math.min(1, Math.max(0, score / 100));
+		const isGood = score >= 85 && confidence >= 0.7;
+
+		const result: AISuggestion = {
+			composition_suggestion: suggestionText,
+			lighting_assessment: '',
+			angle_suggestion: '',
+			overall_score: normalizedScore,
+			should_vibrate: isGood,
+			pose_guide: poseGuide,
+			voice_instruction: instructions.join('，')
+		};
+
+		// Cache the result
+		analysisCache.set(cacheKey, result);
+
+		// Record performance metric
+		performanceMonitor.record('analyzePose', performance.now() - startTime);
+
+		return result;
+		} catch (error) {
+			// Classify and track the error
+			const appError = classifyError(error);
+			errorTracker.track(appError);
+
+			// Try to recover or use fallback
+			const fallback = await recoverFromError(appError, {
+				retryCount: 0,
+				maxRetries: 2,
+				lastSuccess: null
+			});
+
+			return fallback;
+		}
 		});
 	}
 
