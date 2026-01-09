@@ -157,7 +157,7 @@
 		</div>
 
 		<!-- FPS Metric -->
-		<div class="metric-card" in:fly|quintInOut="{{ x: -50 }}" out:fade|global style="--delay: 50ms">
+		<div class="metric-card" in:fly|quintInOut="{{ x: -50 }}" out:fade|quintInOut style="--delay: 50ms">
 			<div class="metric-icon-small">🎥</div>
 			<div class="metric-content-small">
 				<div class="metric-label-small">帧率</div>
@@ -169,7 +169,7 @@
 		</div>
 
 		<!-- Latency Metric -->
-		<div class="metric-card" in:fly|quintInOut="{{ x: -50 }}" out:fade|global style="--delay: 100ms">
+		<div class="metric-card" in:fly|quintInOut="{{ x: -50 }}" out:fade|quintInOut style="--delay: 100ms">
 			<div class="metric-icon-small">📡</div>
 			<div class="metric-content-small">
 				<div class="metric-label-small">AI延迟</div>
@@ -186,7 +186,7 @@
 		</div>
 
 		<!-- Cache Hit Rate -->
-		<div class="metric-card" in:fly|quintInOut="{{ x: -50 }}" out:fade|global style="--delay: 150ms">
+		<div class="metric-card" in:fly|quintInOut="{{ x: -50 }}" out:fade|quintInOut style="--delay: 150ms">
 			<div class="metric-icon-small">💾</div>
 			<div class="metric-content-small">
 				<div class="metric-label-small">缓存命中率</div>
@@ -201,7 +201,7 @@
 		</div>
 
 		<!-- Error Count -->
-		<div class="metric-card" in:fly|quintInOut="{{ x: -50 }}" out:fade|global style="--delay: 200ms">
+		<div class="metric-card" in:fly|quintInOut="{{ x: -50 }}" out:fade|quintInOut style="--delay: 200ms">
 			<div class="metric-icon-small">⚠️</div>
 			<div class="metric-content-small">
 				<div class="metric-label-small">错误数</div>
@@ -217,7 +217,7 @@
 		</div>
 
 		<!-- Cache Size -->
-		<div class="metric-card" in:fly|quintInOut="{{ x: -50 }}" out:fade|global style="--delay: 250ms">
+		<div class="metric-card" in:fly|quintInOut="{{ x: -50 }}" out:fade|quintInOut style="--delay: 250ms">
 			<div class="metric-icon-small">📦</div>
 			<div class="metric-content-small">
 				<div class="metric-label-small">缓存条目</div>
