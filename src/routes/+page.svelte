@@ -7,7 +7,6 @@
 	import PoseSkeleton from '$lib/components/PoseSkeleton.svelte';
 	import PoseConfidenceIndicator from '$lib/components/PoseConfidenceIndicator.svelte';
 	import PoseDifferenceVisualizer from '$lib/components/PoseDifferenceVisualizer.svelte';
-	import PerformanceMetrics from '$lib/components/PerformanceMetrics.svelte';
 
 	let videoElement: HTMLVideoElement;
 	let stream: MediaStream | null = null;
@@ -397,13 +396,6 @@
 		}
 	}
 
-	function showStyleSelector() {
-		const styles = $presetStyles;
-		const currentIndex = styles.findIndex(s => s.id === $currentStyle?.id);
-		const nextIndex = (currentIndex + 1) % styles.length;
-		currentStyle.set(styles[nextIndex]);
-	}
-
 	function goToHistory() {
 		goto('/history');
 	}
@@ -568,13 +560,12 @@
 			{/if}
 		</button>
 
-		<!-- Filter/Effects button -->
-		<button class="effects-btn" on:click={showStyleSelector} aria-label="效果">
-			{#if $currentStyle}
-				<span class="effect-icon">{$currentStyle.icon}</span>
-			{:else}
-				<span class="effect-icon">🎨</span>
-			{/if}
+		<!-- Settings button -->
+		<button class="settings-btn" on:click={goToSettings} aria-label="设置">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+				<circle cx="12" cy="12" r="3"/>
+				<path d="M12 1v6m0 6v6m5.3-14.3l-4.2 4.2m0 5.8l4.2 4.2M1 12h6m6 0h6M2.7 2.7l4.2 4.2m0 5.8l-4.2 4.2"/>
+			</svg>
 		</button>
 	</div>
 
@@ -602,9 +593,6 @@
 			<button class="exit-test-btn" on:click={toggleTestMode}>退出测试模式</button>
 		</div>
 	{/if}
-
-	<!-- Performance metrics -->
-	<PerformanceMetrics visible={true} position="top-right" />
 </div>
 
 <style>
@@ -1002,12 +990,12 @@
 		50% { transform: translate(-50%, -50%) scale(1.1); }
 	}
 
-	/* Effects button */
-	.effects-btn {
+	/* Settings button */
+	.settings-btn {
 		width: 44px;
 		height: 44px;
-		background: rgba(255, 255, 255, 0.1);
-		border: none;
+		background: rgba(255, 255, 255, 0.15);
+		border: 2px solid rgba(255, 255, 255, 0.25);
 		border-radius: 50%;
 		display: flex;
 		align-items: center;
@@ -1016,12 +1004,15 @@
 		transition: all 0.2s;
 	}
 
-	.effects-btn:active {
+	.settings-btn:active {
 		transform: scale(0.95);
+		background: rgba(255, 255, 255, 0.25);
 	}
 
-	.effect-icon {
-		font-size: 20px;
+	.settings-btn svg {
+		width: 22px;
+		height: 22px;
+		color: rgba(255, 255, 255, 0.9);
 	}
 
 	/* AI hint - clear and visible */
