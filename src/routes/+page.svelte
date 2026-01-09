@@ -6,6 +6,7 @@
 	import { getGLMService, captureFrame } from '$lib/services/glm';
 	import PoseSkeleton from '$lib/components/PoseSkeleton.svelte';
 	import PoseConfidenceIndicator from '$lib/components/PoseConfidenceIndicator.svelte';
+	import PoseDifferenceVisualizer from '$lib/components/PoseDifferenceVisualizer.svelte';
 
 	let videoElement: HTMLVideoElement;
 	let stream: MediaStream | null = null;
@@ -433,6 +434,15 @@
 		{#if aiCoachMode && $aiSuggestion?.pose_guide?.target_pose}
 			<div class="pose-guide-overlay">
 				<PoseSkeleton pose={$aiSuggestion.pose_guide.target_pose} opacity={0.9} />
+
+				<!-- Real-time pose difference visualization -->
+				{#if $aiSuggestion.pose_guide.current_pose}
+					<PoseDifferenceVisualizer
+						targetPose={$aiSuggestion.pose_guide.target_pose}
+						currentPose={$aiSuggestion.pose_guide.current_pose}
+						opacity={0.8}
+					/>
+				{/if}
 
 				<!-- Confidence indicator -->
 				{#if $aiSuggestion.pose_guide.confidence !== undefined}
