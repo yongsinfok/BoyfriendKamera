@@ -14,49 +14,84 @@
 	let analysisInterval: number | null = null;
 	let isCapturing = false;
 
-	// For cleanup of visibility change listener
-	let visibilityChangeHandler: (() => void) | null = null;
+	// Camera modes (iOS style)
+	type CameraMode = 'photo' | 'video' | 'portrait' | 'square' | 'pano';
+	let currentMode: CameraMode = 'photo';
+	let cameraModes: { id: CameraMode; label: string; icon: string }[] = [
+		{ id: 'video', label: '视频', icon: '🎥' },
+		{ id: 'photo', label: '照片', icon: '📷' },
+		{ id: 'square', label: '方形', icon: '⬜' },
+		{ id: 'portrait', label: '人像', icon: '👤' }
+	];
 
-	// Test mode for photo upload
+	// Flash modes
+	type FlashMode = 'auto' | 'on' | 'off';
+	let flashMode: FlashMode = 'auto';
+
+	// HDR
+	let hdrEnabled = false;
+
+	// Live Photo
+	let livePhotoEnabled = true;
+
+	// Timer
+	let timerSeconds = 0; // 0, 3, 10
+	let timerActive = false;
+
+	// Grid
+	let gridEnabled = false;
+
+	// Filters
+	let showFilters = false;
+
+	// Camera facing
+	let facingMode: 'user' | 'environment' = 'environment';
+
+	// Zoom
+	let zoomLevel = 1;
+	let minZoom = 1;
+	let maxZoom = 1;
+	let zoomSupported = false;
+
+	// Focus
+	let focusPoint: { x: number; y: number } | null = null;
+	let showFocusSquare = false;
+
+	// Exposure lock
+	let exposureLocked = false;
+
+	// Test mode
 	let testMode = false;
 	let uploadedImage: string | null = null;
 
 	// Photo save feedback
 	let showSavedFeedback = false;
 
-	// Zoom controls
-	let zoomLevel = 1; // 1 = 1x, 2 = 2x, 0.5 = 0.5x
-	let zoomOptions = [0.5, 1, 2]; // Available zoom levels
-	let currentZoomIndex = 1; // Start at 1x (index 1)
-	let minZoom = 1;
-	let maxZoom = 1;
-	let zoomSupported = false;
-
-	// AI Coach mode
-	let aiCoachMode = false; // Default to normal mode
-
 	// Settings
 	let apiKey = $settings.apiKey;
 	let enableVibration = $settings.enableVibration;
-	let enableGuideLines = $settings.enableGuideLines;
+	let aiCoachMode = $settings.enablePoseGuide || false;
 
 	// Subscribe to settings changes
 	settings.subscribe((s) => {
 		apiKey = s.apiKey;
 		enableVibration = s.enableVibration;
-		enableGuideLines = s.enableGuideLines;
+		gridEnabled = s.enableGuideLines;
 		aiCoachMode = s.enablePoseGuide || false;
 	});
 
 	async function startCamera() {
 		try {
 			stream = await navigator.mediaDevices.getUserMedia({
-				video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
+				video: {
+					facingMode: facingMode,
+					width: { ideal: 1920 },
+					height: { ideal: 1080 }
+				},
 				audio: false
 			});
 			if (videoElement) {
 				videoElement.srcObject = stream;
-				// Check zoom capabilities after camera is ready
 				videoElement.onloadedmetadata = () => {
 					checkZoomCapabilities();
 					if (apiKey && !testMode) {
@@ -85,10 +120,7 @@
 			minZoom = capabilities.zoom.min;
 			maxZoom = capabilities.zoom.max;
 			zoomSupported = true;
-			// Set default zoom to 1x
 			setZoom(1);
-		} else {
-			zoomSupported = false;
 		}
 	}
 
@@ -109,9 +141,111 @@
 		}
 	}
 
-	function cycleZoom() {
-		currentZoomIndex = (currentZoomIndex + 1) % zoomOptions.length;
-		const newZoom = zoomOptions[currentZoomIndex];
+	async function switchCamera() {
+		facingMode = facingMode === 'environment' ? 'user' : 'environment';
+		stopCamera();
+		await startCamera();
+	}
+
+	function cycleFlash() {
+		const modes: FlashMode[] = ['auto', 'on', 'off'];
+		const currentIndex = modes.indexOf(flashMode);
+		flashMode = modes[(currentIndex + 1) % modes.length];
+	}
+
+	function toggleHDR() {
+		hdrEnabled = !hdrEnabled;
+	}
+
+	function toggleLivePhoto() {
+		livePhotoEnabled = !livePhotoEnabled;
+	}
+
+	function cycleTimer() {
+		const options = [0, 3, 10];
+		const currentIndex = options.indexOf(timerSeconds);
+		timerSeconds = options[(currentIndex + 1) % options.length];
+	}
+
+	function toggleGrid() {
+		gridEnabled = !gridEnabled;
+		settings.update({ enableGuideLines: gridEnabled });
+	}
+
+	async function takePhoto() {
+		if (!videoElement || testMode) return;
+
+		// Timer countdown
+		if (timerSeconds > 0) {
+			timerActive = true;
+			for (let i = timerSeconds; i > 0; i--) {
+				await new Promise(resolve => setTimeout(resolve, 1000));
+			}
+			timerActive = false;
+		}
+
+		isCapturing = true;
+
+		// Flash effect
+		if (flashMode === 'on') {
+			const flash = document.createElement('div');
+			flash.className = 'flash-effect';
+			document.body.appendChild(flash);
+			setTimeout(() => flash.remove(), 100);
+		}
+
+		// Capture photo
+		const canvas = document.createElement('canvas');
+		canvas.width = videoElement.videoWidth;
+		canvas.height = videoElement.videoHeight;
+		const ctx = canvas.getContext('2d');
+		if (ctx) {
+			ctx.drawImage(videoElement, 0, 0);
+
+			canvas.toBlob(async (blob) => {
+				if (blob) {
+					await addPhotoToSession(blob);
+					showSavedFeedback = true;
+					setTimeout(() => showSavedFeedback = false, 1500);
+
+					// Vibrate feedback
+					if (enableVibration && 'vibrate' in navigator) {
+						navigator.vibrate(50);
+					}
+				}
+				isCapturing = false;
+			}, 'image/jpeg', 0.95);
+		} else {
+			isCapturing = false;
+		}
+	}
+
+	function handleVideoTap(event: MouseEvent) {
+		if (!videoElement) return;
+
+		const rect = videoElement.getBoundingClientRect();
+		const x = (event.clientX - rect.left) / rect.width;
+		const y = (event.clientY - rect.top) / rect.height;
+
+		// Set focus point
+		focusPoint = { x, y };
+		showFocusSquare = true;
+
+		// Hide focus square after animation
+		setTimeout(() => {
+			showFocusSquare = false;
+		}, 1000);
+
+		// Trigger focus/exposure (would need to use ImageCapture API)
+		// For now, just visual feedback
+	}
+
+	function handleVideoZoom(event: WheelEvent) {
+		if (!zoomSupported) return;
+
+		event.preventDefault();
+		const delta = event.deltaY > 0 ? -0.5 : 0.5;
+		const newZoom = Math.max(minZoom, Math.min(maxZoom, zoomLevel + delta));
 		setZoom(newZoom);
 	}
 
@@ -126,46 +260,36 @@
 		}
 	}
 
-	// AI Analysis loop - every 2.5 seconds for better battery life
 	function startAnalysisLoop() {
 		if (analysisInterval) clearInterval(analysisInterval);
 
 		analysisInterval = setInterval(async () => {
 			if (!videoElement || !apiKey || isCapturing || testMode) return;
-
-			// Skip analysis if page is hidden (battery optimization)
 			if (document.hidden) return;
 
 			try {
 				isAnalyzing.set(true);
-				// Use adaptive quality: faster models get lower resolution
 				const isFlashModel = ($defaultModel || 'glm-4.6v-flash').includes('flash');
-				const quality = isFlashModel ? 0.4 : 0.5; // Lower quality for flash models
+				const quality = isFlashModel ? 0.4 : 0.5;
 				const base64Frame = captureFrame(videoElement, quality);
 
-				// Use the selected model from settings
 				const model = $defaultModel || 'glm-4.6v-flash';
 				const glm = getGLMService(apiKey, model);
 				const style = $currentStyle?.name || '';
 
-				// Use different analysis method based on mode
 				let suggestion;
 				if (aiCoachMode) {
-					// AI Coach mode: analyze pose and generate skeleton
 					suggestion = await glm.analyzePose(base64Frame, style);
 				} else {
-					// Normal mode: analyze composition and grid position
 					suggestion = await glm.analyzeFrame(base64Frame, style);
 				}
 
 				aiSuggestion.set(suggestion);
 
-				// Vibrate if score is good (lightweight vibration for battery)
 				if (suggestion.should_vibrate && enableVibration && 'vibrate' in navigator) {
-					navigator.vibrate(30); // Reduced from 50ms to 30ms for battery
+					navigator.vibrate(30);
 				}
 
-				// Voice coaching if enabled and available
 				if (aiCoachMode && suggestion.voice_instruction && 'speechSynthesis' in window) {
 					const utterance = new SpeechSynthesisUtterance(suggestion.voice_instruction);
 					utterance.lang = 'zh-CN';
@@ -174,23 +298,12 @@
 				}
 			} catch (err) {
 				console.error('AI analysis failed:', err);
-				// Show error in suggestion only if it's a critical error
-				if (err instanceof Error && err.message.includes('API')) {
-					aiSuggestion.set({
-						composition_suggestion: 'API错误，请检查配置',
-						lighting_assessment: '',
-						angle_suggestion: '',
-						overall_score: 0,
-						should_vibrate: false
-					});
-				}
 			} finally {
 				isAnalyzing.set(false);
 			}
-		}, 2500) as unknown as number; // Increased from 2000ms to 2500ms
+		}, 2500) as unknown as number;
 	}
 
-	// Stop analysis loop (for battery optimization when page is hidden)
 	function stopAnalysisLoop() {
 		if (analysisInterval) {
 			clearInterval(analysisInterval);
@@ -198,53 +311,17 @@
 		}
 	}
 
-	async function takePhoto() {
-		if (!videoElement || testMode) return;
-
-		isCapturing = true;
-
-		// Flash effect
-		const flash = document.createElement('div');
-		flash.className = 'flash-effect';
-		document.body.appendChild(flash);
-		setTimeout(() => flash.remove(), 100);
-
-		// Capture photo
-		const canvas = document.createElement('canvas');
-		canvas.width = videoElement.videoWidth;
-		canvas.height = videoElement.videoHeight;
-		const ctx = canvas.getContext('2d');
-		if (ctx) {
-			ctx.drawImage(videoElement, 0, 0);
-
-			canvas.toBlob(async (blob) => {
-				if (blob) {
-					await addPhotoToSession(blob);
-					// Show saved feedback
-					showSavedFeedback = true;
-					setTimeout(() => showSavedFeedback = false, 1500);
-				}
-				isCapturing = false;
-			}, 'image/jpeg', 0.9);
-		} else {
-			isCapturing = false;
-		}
-	}
-
-	// Handle file upload for testing
 	async function handleFileUpload(event: Event) {
 		const target = event.target as HTMLInputElement;
 		const file = target.files?.[0];
 		if (!file) return;
 
-		// Read and display the image
 		const reader = new FileReader();
 		reader.onload = (e) => {
 			uploadedImage = e.target?.result as string;
 		};
 		reader.readAsDataURL(file);
 
-		// Analyze the image
 		if (!apiKey) {
 			aiSuggestion.set({
 				composition_suggestion: '请先在设置中配置 API Key',
@@ -258,20 +335,15 @@
 
 		isAnalyzing.set(true);
 		try {
-			// Use the selected model from settings
 			const model = $defaultModel || 'glm-4.6v-flash';
 			const glm = getGLMService(apiKey, model);
 			const style = $currentStyle?.name || '';
 
-			// Compress image and convert to base64
 			const base64 = await new Promise<string>((resolve, reject) => {
 				const img = new Image();
 				img.onload = () => {
-					// Create canvas to resize/compress
 					const canvas = document.createElement('canvas');
 					const ctx = canvas.getContext('2d');
-
-					// Calculate new dimensions (max 1024x1024 for GLM-4V)
 					const maxDim = 1024;
 					let width = img.width;
 					let height = img.height;
@@ -291,7 +363,6 @@
 
 					if (ctx) {
 						ctx.drawImage(img, 0, 0, width, height);
-						// Use JPEG quality 0.8 for compression
 						resolve(canvas.toDataURL('image/jpeg', 0.8).split(',')[1]);
 					} else {
 						reject(new Error('Failed to get canvas context'));
@@ -333,7 +404,6 @@
 	}
 
 	function showStyleSelector() {
-		// Simple implementation - cycle through styles
 		const styles = $presetStyles;
 		const currentIndex = styles.findIndex(s => s.id === $currentStyle?.id);
 		const nextIndex = (currentIndex + 1) % styles.length;
@@ -349,49 +419,43 @@
 	}
 
 	onMount(() => {
-		// Initialize settings
 		settings.init();
-		// Create new session
 		createSession();
-		// Start camera
 		startCamera();
 
-		// Battery optimization: pause/resume AI when page visibility changes
-		visibilityChangeHandler = () => {
+		const visibilityHandler = () => {
 			if (document.hidden) {
-				// Page is hidden, stop AI analysis to save battery
 				stopAnalysisLoop();
 			} else {
-				// Page is visible again, resume AI analysis if conditions are met
 				if (apiKey && !testMode && videoElement) {
 					startAnalysisLoop();
 				}
 			}
 		};
+		document.addEventListener('visibilitychange', visibilityHandler);
 
-		document.addEventListener('visibilitychange', visibilityChangeHandler);
+		return () => {
+			document.removeEventListener('visibilitychange', visibilityHandler);
+		};
 	});
 
 	onDestroy(() => {
 		stopCamera();
-		// Cleanup visibility change listener
-		if (visibilityChangeHandler) {
-			document.removeEventListener('visibilitychange', visibilityChangeHandler);
-			visibilityChangeHandler = null;
-		}
 	});
 </script>
 
 <svelte:head>
 	<meta name="theme-color" content="#000000" />
+	<meta name="apple-mobile-web-app-capable" content="yes" />
+	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 </svelte:head>
 
-<div class="camera-container">
+<div class="ios-camera">
 	{#if testMode && uploadedImage}
-		<!-- Test mode - show uploaded image -->
-		<img src={uploadedImage} alt="Test image" class="test-image" />
+		<!-- Test mode image -->
+		<img src={uploadedImage} alt="Test" class="camera-feed" />
 	{:else}
-		<!-- Camera mode -->
+		<!-- Camera feed -->
 		<video
 			bind:this={videoElement}
 			autoplay
@@ -399,167 +463,207 @@
 			muted
 			class="camera-feed"
 			class:hidden={testMode}
+			on:click={handleVideoTap}
+			on:wheel={handleVideoZoom}
 		></video>
 	{/if}
 
-	<div class="overlay">
-		<!-- Rule of thirds grid (only in camera mode) -->
-		{#if enableGuideLines && !testMode}
-			<div class="grid-lines">
-				<!-- Vertical lines at 33.33% and 66.67% -->
-				<div class="grid-line vertical v1"></div>
-				<div class="grid-line vertical v2"></div>
-				<!-- Horizontal lines at 33.33% and 66.67% -->
-				<div class="grid-line horizontal h1"></div>
-				<div class="grid-line horizontal h2"></div>
+	<!-- Grid overlay -->
+	{#if gridEnabled && !testMode}
+		<div class="grid-overlay">
+			<div class="grid-line vertical v1"></div>
+			<div class="grid-line vertical v2"></div>
+			<div class="grid-line horizontal h1"></div>
+			<div class="grid-line horizontal h2"></div>
+		</div>
+	{/if}
 
-				<!-- Position indicator circle from AI -->
-				{#if $aiSuggestion?.guide_lines && $aiSuggestion.guide_lines.length > 0}
-					{#each $aiSuggestion.guide_lines as guide}
-						{#if guide.type === 'standing_position' && guide.x !== undefined && guide.y !== undefined}
-							<div class="position-indicator" style="left: {guide.x * 100}%; top: {guide.y * 100}%;"></div>
-							<!-- Directional arrows to show movement -->
-							<div class="position-arrows" style="left: {guide.x * 100}%; top: {guide.y * 100}%;"></div>
-							<!-- Label to indicate this is the target position -->
-							<div class="position-label" style="left: {guide.x * 100}%; top: {guide.y * 100}%;">
-								<span class="label-icon">📍</span>
-								<span class="label-text">移到这里</span>
-							</div>
-						{/if}
-					{/each}
-				{/if}
-			</div>
-		{/if}
+	<!-- Focus square -->
+	{#if showFocusSquare && focusPoint}
+		<div class="focus-square" style="left: {focusPoint.x * 100}%; top: {focusPoint.y * 100}%};"></div>
+	{/if}
 
-		<!-- AI Pose Guide overlay (when AI Coach mode is active) -->
-		{#if aiCoachMode && $aiSuggestion?.pose_guide?.target_pose}
-			<div class="pose-guide-overlay">
-				<PoseSkeleton pose={$aiSuggestion.pose_guide.target_pose} opacity={0.9} />
+	<!-- AI Pose Guide overlay -->
+	{#if aiCoachMode && $aiSuggestion?.pose_guide?.target_pose && !testMode}
+		<div class="pose-guide-overlay">
+			<PoseSkeleton pose={$aiSuggestion.pose_guide.target_pose} opacity={0.7} />
 
-				<!-- Real-time pose difference visualization -->
-				{#if $aiSuggestion.pose_guide.current_pose}
-					<PoseDifferenceVisualizer
-						targetPose={$aiSuggestion.pose_guide.target_pose}
-						currentPose={$aiSuggestion.pose_guide.current_pose}
-						opacity={0.8}
+			{#if $aiSuggestion.pose_guide.current_pose}
+				<PoseDifferenceVisualizer
+					targetPose={$aiSuggestion.pose_guide.target_pose}
+					currentPose={$aiSuggestion.pose_guide.current_pose}
+					opacity={0.6}
+				/>
+			{/if}
+
+			{#if $aiSuggestion.pose_guide.confidence !== undefined}
+				<div class="confidence-indicator">
+					<PoseConfidenceIndicator
+						confidence={$aiSuggestion.pose_guide.confidence}
+						label=""
 					/>
-				{/if}
+				</div>
+			{/if}
 
-				<!-- Confidence indicator -->
-				{#if $aiSuggestion.pose_guide.confidence !== undefined}
-					<div class="confidence-indicator-container">
-						<PoseConfidenceIndicator
-							confidence={$aiSuggestion.pose_guide.confidence}
-							label="姿势准确度"
-						/>
-					</div>
-				{/if}
+			{#if $aiSuggestion.pose_guide.instructions && $aiSuggestion.pose_guide.instructions.length > 0}
+				<div class="pose-instructions-ios">
+					{#each $aiSuggestion.pose_guide.instructions.slice(0, 2) as instruction}
+						<div class="instruction-item-ios">{instruction}</div>
+					{/each}
+				</div>
+			{/if}
+		</div>
+	{/if}
 
-				<!-- Pose instruction labels -->
-				{#if $aiSuggestion.pose_guide.instructions && $aiSuggestion.pose_guide.instructions.length > 0}
-					<div class="pose-instructions">
-						{#each $aiSuggestion.pose_guide.instructions as instruction}
-							<div class="instruction-item">
-								<span class="instruction-bullet">→</span>
-								{instruction}
-							</div>
-						{/each}
-					</div>
-				{/if}
-			</div>
-		{/if}
-
-		<!-- Top bar with mode toggle and style selector -->
-		<div class="top-bar">
-			<button class="test-mode-btn" on:click={toggleTestMode}>
-				{testMode ? '📷 相机' : '🖼️ 测试'}
-			</button>
-			<!-- AI Coach mode toggle -->
-			<button class="ai-coach-btn" class:active={aiCoachMode} on:click={() => aiCoachMode = !aiCoachMode}>
-				{aiCoachMode ? '🤖 AI教练' : '📐 构图'}
-			</button>
-			<button class="style-btn" on:click={showStyleSelector}>
-				{#if $currentStyle}
-					📷 {$currentStyle.name}
+	<!-- Top toolbar -->
+	<div class="top-toolbar">
+		<!-- Flash button -->
+		<button class="tool-btn" on:click={cycleFlash} aria-label="闪光灯">
+			<span class="tool-icon">
+				{#if flashMode === 'auto'}
+					⚡
+				{:else if flashMode === 'on'}
+					⚡
 				{:else}
-					📷 风格
+					⚡
 				{/if}
-			</button>
-			<button class="history-btn" on:click={goToHistory}>
-				📚 {$currentPhotoCount > 0 ? `(${$currentPhotoCount})` : ''}
-			</button>
-		</div>
+			</span>
+			<span class="tool-label">{flashMode === 'auto' ? '自动' : flashMode === 'on' ? '开启' : '关闭'}</span>
+		</button>
 
-		<!-- Zoom control (only show when zoom is supported and in camera mode) -->
-		{#if zoomSupported && !testMode}
-			<button class="zoom-btn" on:click={cycleZoom}>
-				{zoomOptions[currentZoomIndex]}x
-			</button>
-		{/if}
+		<!-- HDR button -->
+		<button class="tool-btn" class:active={hdrEnabled} on:click={toggleHDR} aria-label="HDR">
+			<span class="tool-icon">HDR</span>
+		</button>
 
-		<!-- Saved feedback toast -->
-		{#if showSavedFeedback}
-			<div class="saved-toast">
-				✓ 已保存到相册
-			</div>
-		{/if}
+		<!-- Live Photo -->
+		<button class="tool-btn live-photo" class:active={livePhotoEnabled} on:click={toggleLivePhoto} aria-label="实况">
+			<span class="tool-icon">{livePhotoEnabled ? '🔵' : '⭕'}</span>
+			<span class="live-photo-rings"></span>
+		</button>
 
-		<!-- AI suggestion text -->
-		<div class="ai-suggestion">
-			{#if $aiSuggestion && $aiSuggestion.composition_suggestion}
-				{$aiSuggestion.composition_suggestion}
-				{#if $aiSuggestion.overall_score > 0.7}
-					<span class="score-good">✨</span>
-				{/if}
-			{:else if $isAnalyzing}
-				<span class="analyzing">AI 正在思考...</span>
-			{:else if !apiKey}
-				请先在设置中配置 API Key
-			{:else}
-				{testMode ? '请上传照片' : '准备拍照中...'}
-			{/if}
-		</div>
+		<!-- Timer -->
+		<button class="tool-btn" class:active={timerSeconds > 0} on:click={cycleTimer} aria-label="定时器">
+			<span class="tool-icon">⏱</span>
+			<span class="tool-label">{timerSeconds > 0 ? timerSeconds + 's' : ''}</span>
+		</button>
 
-		<!-- Bottom controls -->
-		<div class="bottom-controls">
-			<button class="history-btn-small" on:click={goToHistory} aria-label="历史记录">📚</button>
-			{#if testMode}
-				<!-- Upload button in test mode -->
-				<label class="upload-btn" aria-label="上传照片">
-					<input
-						type="file"
-						accept="image/*"
-						on:change={handleFileUpload}
-						hidden
-					>
-					<span>📤 上传</span>
-				</label>
-			{:else}
-				<!-- Shutter button in camera mode -->
-				<button
-					class="shutter-btn"
-					on:click={takePhoto}
-					disabled={isCapturing}
-					class:capturing={isCapturing}
-					aria-label="拍照"
-				></button>
-			{/if}
-			<button class="settings-btn-small" on:click={goToSettings} aria-label="设置">⚙️</button>
-		</div>
+		<!-- Camera switch -->
+		<button class="camera-switch" on:click={switchCamera} aria-label="切换摄像头">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<path d="M20 4h-3.17L15 2H9L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-5 11.5V13c1.25 0 2.45-.2 3.57-.57a1.02 1.02 0 0 0-.7-1.3c-.95.32-1.93.5-2.87.5V8c0-.55-.45-1-1-1s-1 .45-1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6c0-1.65 1.35-3 3-3s3 1.35 3 3v6c0 1.65-1.35 3-3 3s-3-1.35-3-3V9.5c-2 0-3.92-.5-5.71-1.43a1 1 0 0 0-.7 1.3c1.92 1 4.12 1.43 6.41 1.43z"/>
+			</svg>
+		</button>
 	</div>
 
-	<!-- Performance metrics dashboard -->
+	<!-- Mode selector (bottom) -->
+	<div class="mode-selector">
+		{#each cameraModes as mode}
+			<button
+				class="mode-btn"
+				class:active={currentMode === mode.id}
+				on:click={() => currentMode = mode.id}
+				aria-label={mode.label}
+			>
+				<span class="mode-icon">{mode.icon}</span>
+				{#if currentMode === mode.id}
+					<span class="mode-label">{mode.label}</span>
+				{/if}
+			</button>
+		{/each}
+	</div>
+
+	<!-- Shutter button (center bottom) -->
+	<div class="shutter-container">
+		<!-- Photo gallery preview -->
+		<button class="gallery-preview" on:click={goToHistory} aria-label="照片库">
+			{#if $currentPhotoCount > 0}
+				<span class="gallery-count">{$currentPhotoCount}</span>
+			{/if}
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+				<rect x="3" y="3" width="18" height="18" rx="2" ry="2" stroke="white" stroke-opacity="0.8"/>
+				<circle cx="8.5" cy="8.5" r="1.5" fill="white" fill-opacity="0.8"/>
+				<circle cx="15.5" cy="8.5" r="1.5" fill="white" fill-opacity="0.8"/>
+				<path d="M8 15c1.5 2 6.5 2 8 0" stroke="white" stroke-opacity="0.8" stroke-width="1.5" stroke-linecap="round"/>
+			</svg>
+		</button>
+
+		<!-- Main shutter button -->
+		<button
+			class="shutter-button"
+			on:click={takePhoto}
+			disabled={isCapturing}
+			class:capturing={isCapturing}
+			class:timer-active={timerActive}
+			aria-label="拍照"
+		>
+			{#if timerActive && timerSeconds > 0}
+				<span class="timer-countdown">{timerSeconds}</span>
+			{/if}
+		</button>
+
+		<!-- Filter/Effects button -->
+		<button class="effects-btn" on:click={showStyleSelector} aria-label="效果">
+			{#if $currentStyle}
+				<span class="effect-icon">{$currentStyle.icon}</span>
+			{:else}
+				<span class="effect-icon">🎨</span>
+			{/if}
+		</button>
+	</div>
+
+	<!-- AI suggestion overlay (subtle) -->
+	{#if $aiSuggestion?.composition_suggestion && !testMode}
+		<div class="ai-hint">
+			{$aiSuggestion.composition_suggestion}
+		</div>
+	{/if}
+
+	<!-- Saved feedback -->
+	{#if showSavedFeedback}
+		<div class="saved-feedback">
+			<div class="saved-icon"></div>
+		</div>
+	{/if}
+
+	<!-- Test mode upload -->
+	{#if testMode}
+		<div class="test-mode-upload">
+			<label class="upload-label">
+				<input type="file" accept="image/*" on:change={handleFileUpload} hidden>
+				<span>📤 上传照片</span>
+			</label>
+			<button class="exit-test-btn" on:click={toggleTestMode}>退出测试模式</button>
+		</div>
+	{/if}
+
+	<!-- Settings access (long press or hidden) -->
+	<button class="settings-access" on:click={goToSettings} aria-label="设置">
+		⚙️
+	</button>
+
+	<!-- Performance metrics -->
 	<PerformanceMetrics visible={true} position="top-right" />
 </div>
 
 <style>
-	.camera-container {
+	:global(body) {
+		margin: 0;
+		padding: 0;
+		overflow: hidden;
+		background: #000;
+		-webkit-user-select: none;
+		user-select: none;
+	}
+
+	.ios-camera {
 		position: fixed;
 		top: 0;
 		left: 0;
 		width: 100%;
 		height: 100%;
 		background: #000;
+		overflow: hidden;
 	}
 
 	.camera-feed {
@@ -568,31 +672,15 @@
 		object-fit: cover;
 	}
 
-	.camera-feed.hidden {
-		display: none;
-	}
-
-	.test-image {
-		width: 100%;
-		height: 100%;
-		object-fit: contain;
-	}
-
-	.overlay {
-		position: fixed;
-		top: 0;
-		left: 0;
-		width: 100%;
-		height: 100%;
-		pointer-events: none;
-	}
-
-	.grid-lines {
+	/* Grid overlay */
+	.grid-overlay {
 		position: absolute;
 		top: 0;
 		left: 0;
 		width: 100%;
 		height: 100%;
+		pointer-events: none;
+		z-index: 10;
 	}
 
 	.grid-line {
@@ -600,159 +688,452 @@
 		background: rgba(255, 255, 255, 0.3);
 	}
 
-	/* iOS-style 9-grid lines */
 	.grid-line.vertical {
 		width: 1px;
 		height: 100%;
+		top: 0;
 	}
 
-	.grid-line.vertical.v1 {
-		left: 33.33%;
-	}
-
-	.grid-line.vertical.v2 {
-		left: 66.67%;
-	}
+	.grid-line.vertical.v1 { left: 33.33%; }
+	.grid-line.vertical.v2 { left: 66.67%; }
 
 	.grid-line.horizontal {
 		width: 100%;
 		height: 1px;
+		left: 0;
 	}
 
-	.grid-line.horizontal.h1 {
-		top: 33.33%;
-	}
+	.grid-line.horizontal.h1 { top: 33.33%; }
+	.grid-line.horizontal.h2 { top: 66.67%; }
 
-	.grid-line.horizontal.h2 {
-		top: 66.67%;
-	}
-
-	/* Position indicator circle */
-	.position-indicator {
+	/* Focus square */
+	.focus-square {
 		position: absolute;
-		width: 80px;
-		height: 80px;
+		width: 60px;
+		height: 60px;
 		transform: translate(-50%, -50%);
-		border: 4px solid rgba(255, 215, 0, 0.9);
-		border-radius: 50%;
-		background: radial-gradient(circle, rgba(255, 215, 0, 0.2) 0%, rgba(255, 215, 0, 0.05) 70%, transparent 100%);
-		box-shadow: 0 0 30px rgba(255, 215, 0, 0.6), inset 0 0 15px rgba(255, 215, 0, 0.4);
-		animation: pulse 2s ease-in-out infinite, glow 1.5s ease-in-out infinite alternate;
+		border: 2px solid #FFCC00;
+		border-radius: 4px;
 		pointer-events: none;
+		z-index: 20;
+		animation: focusPulse 1s ease-out;
 	}
 
-	/* Position arrows */
-	.position-arrows {
-		position: absolute;
-		width: 100px;
-		height: 100px;
-		transform: translate(-50%, -50%);
-		pointer-events: none;
-	}
-
-	.position-arrows::before,
-	.position-arrows::after {
+	.focus-square::before,
+	.focus-square::after {
 		content: '';
 		position: absolute;
-		background: rgba(255, 215, 0, 0.8);
-		animation: arrowPulse 1.5s ease-in-out infinite;
+		background: #FFCC00;
 	}
 
-	.position-arrows::before {
-		width: 2px;
-		height: 20px;
-		top: -15px;
-		left: 50%;
-		transform: translateX(-50%);
-	}
-
-	.position-arrows::after {
+	.focus-square::before {
 		width: 20px;
-		height: 2px;
-		left: -15px;
+		height: 1px;
 		top: 50%;
-		transform: translateY(-50%);
+		left: 50%;
+		transform: translate(-50%, -50%);
 	}
 
-	@keyframes pulse {
-		0%, 100% {
-			transform: translate(-50%, -50%) scale(1);
-			opacity: 0.9;
-		}
-		50% {
-			transform: translate(-50%, -50%) scale(1.15);
-			opacity: 1;
-		}
+	.focus-square::after {
+		width: 1px;
+		height: 20px;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
 	}
 
-	@keyframes glow {
-		0% {
-			box-shadow: 0 0 30px rgba(255, 215, 0, 0.6), inset 0 0 15px rgba(255, 215, 0, 0.4);
-		}
-		100% {
-			box-shadow: 0 0 50px rgba(255, 215, 0, 0.8), inset 0 0 20px rgba(255, 215, 0, 0.5);
-		}
+	@keyframes focusPulse {
+		0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+		100% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
 	}
 
-	@keyframes arrowPulse {
-		0%, 100% {
-			opacity: 0.6;
-		}
-		50% {
-			opacity: 1;
-		}
-	}
-
-	/* Position label */
-	.position-label {
+	/* Top toolbar */
+	.top-toolbar {
 		position: absolute;
-		transform: translate(-50%, -100%);
-		margin-top: -55px;
+		top: 0;
+		left: 0;
+		right: 0;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 12px 20px;
+		background: linear-gradient(to bottom, rgba(0, 0, 0, 0.6), transparent);
+		z-index: 100;
+	}
+
+	.tool-btn {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 2px;
+		background: transparent;
+		border: none;
+		color: white;
+		padding: 8px 12px;
+		border-radius: 8px;
+		cursor: pointer;
+		transition: background 0.2s;
+		min-width: 44px;
+	}
+
+	.tool-btn:active {
+		background: rgba(255, 255, 255, 0.1);
+	}
+
+	.tool-btn.active {
+		color: #FFCC00;
+	}
+
+	.tool-icon {
+		font-size: 18px;
+		line-height: 1;
+	}
+
+	.tool-label {
+		font-size: 10px;
+		color: rgba(255, 255, 255, 0.6);
+		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+	}
+
+	/* Live Photo special styling */
+	.live-photo .live-photo-rings {
+		position: absolute;
+		width: 28px;
+		height: 28px;
+		border: 2px solid rgba(255, 255, 255, 0.3);
+		border-radius: 50%;
+		animation: none;
+	}
+
+	.live-photo.active .live-photo-rings {
+		border-color: rgba(255, 204, 0, 0.6);
+		animation: livePhotoPulse 2s ease-in-out infinite;
+	}
+
+	@keyframes livePhotoPulse {
+		0%, 100% { transform: scale(1); opacity: 0.6; }
+		50% { transform: scale(1.3); opacity: 0; }
+	}
+
+	/* Camera switch button */
+	.camera-switch {
+		width: 44px;
+		height: 44px;
+		background: rgba(255, 255, 255, 0.1);
+		border: 2px solid rgba(255, 255, 255, 0.3);
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.camera-switch:active {
+		background: rgba(255, 255, 255, 0.2);
+		transform: scale(0.95);
+	}
+
+	.camera-switch svg {
+		width: 20px;
+		height: 20px;
+		color: white;
+	}
+
+	/* Mode selector */
+	.mode-selector {
+		position: absolute;
+		bottom: 60px;
+		left: 0;
+		right: 0;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		gap: 8px;
+		padding: 0 20px;
+		z-index: 100;
+	}
+
+	.mode-btn {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		gap: 4px;
-		pointer-events: none;
-		animation: fadeInScale 0.5s ease-out;
+		background: transparent;
+		border: none;
+		color: rgba(255, 255, 255, 0.5);
+		padding: 8px 16px;
+		cursor: pointer;
+		transition: all 0.2s;
 	}
 
-	.label-icon {
-		font-size: 24px;
-		animation: bounce 1s ease-in-out infinite;
+	.mode-btn.active {
+		color: #FFCC00;
 	}
 
-	.label-text {
-		background: rgba(255, 215, 0, 0.9);
-		color: #000;
-		padding: 4px 10px;
-		border-radius: 12px;
-		font-size: 12px;
+	.mode-btn:active {
+		transform: scale(0.95);
+	}
+
+	.mode-icon {
+		font-size: 22px;
+	}
+
+	.mode-label {
+		font-size: 10px;
 		font-weight: 600;
 		white-space: nowrap;
+	}
+
+	/* Shutter container */
+	.shutter-container {
+		position: absolute;
+		bottom: 30px;
+		left: 0;
+		right: 0;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		gap: 40px;
+		padding: 0 20px;
+		z-index: 100;
+	}
+
+	/* Gallery preview */
+	.gallery-preview {
+		position: relative;
+		width: 50px;
+		height: 50px;
+		background: rgba(255, 255, 255, 0.15);
+		border-radius: 8px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		transition: all 0.2s;
+		overflow: hidden;
+	}
+
+	.gallery-preview:active {
+		transform: scale(0.95);
+	}
+
+	.gallery-preview svg {
+		width: 28px;
+		height: 28px;
+	}
+
+	.gallery-count {
+		position: absolute;
+		top: -2px;
+		right: -2px;
+		background: #FFCC00;
+		color: #000;
+		font-size: 10px;
+		font-weight: bold;
+		padding: 2px 6px;
+		border-radius: 10px;
+		min-width: 16px;
+		text-align: center;
+	}
+
+	/* Shutter button - iOS style */
+	.shutter-button {
+		width: 72px;
+		height: 72px;
+		background: white;
+		border: none;
+		border-radius: 50%;
+		cursor: pointer;
+		position: relative;
+		transition: all 0.1s;
 		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 	}
 
-	@keyframes bounce {
-		0%, 100% {
-			transform: translateY(0);
-		}
-		50% {
-			transform: translateY(-5px);
-		}
+	.shutter-button::before {
+		content: '';
+		position: absolute;
+		top: 4px;
+		left: 4px;
+		right: 4px;
+		bottom: 4px;
+		border: 2px solid #000;
+		border-radius: 50%;
+		transition: all 0.1s;
 	}
 
-	@keyframes fadeInScale {
-		from {
-			opacity: 0;
-			transform: translate(-50%, -100%) scale(0.5);
-		}
-		to {
-			opacity: 1;
-			transform: translate(-50%, -100%) scale(1);
-		}
+	.shutter-button:active:not(:disabled) {
+		transform: scale(0.95);
 	}
 
-	/* AI Pose Guide overlay */
+	.shutter-button:active:not(:disabled)::before {
+		top: 8px;
+		left: 8px;
+		right: 8px;
+		bottom: 8px;
+		border-width: 4px;
+	}
+
+	.shutter-button:disabled {
+		opacity: 0.7;
+		cursor: not-allowed;
+	}
+
+	.shutter-button.timer-active {
+		background: #FFCC00;
+	}
+
+	.timer-countdown {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		font-size: 32px;
+		font-weight: bold;
+		color: #000;
+		animation: timerPulse 1s ease-in-out infinite;
+	}
+
+	@keyframes timerPulse {
+		0%, 100% { transform: translate(-50%, -50%) scale(1); }
+		50% { transform: translate(-50%, -50%) scale(1.1); }
+	}
+
+	/* Effects button */
+	.effects-btn {
+		width: 44px;
+		height: 44px;
+		background: rgba(255, 255, 255, 0.1);
+		border: none;
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.effects-btn:active {
+		transform: scale(0.95);
+	}
+
+	.effect-icon {
+		font-size: 20px;
+	}
+
+	/* AI hint - subtle overlay */
+	.ai-hint {
+		position: absolute;
+		bottom: 150px;
+		left: 0;
+		right: 0;
+		text-align: center;
+		padding: 0 20px;
+		color: rgba(255, 255, 255, 0.7);
+		font-size: 14px;
+		text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+		pointer-events: none;
+		z-index: 50;
+	}
+
+	/* Saved feedback animation */
+	.saved-feedback {
+		position: fixed;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		z-index: 1000;
+		animation: savedPop 0.6s ease-out forwards;
+	}
+
+	.saved-icon {
+		width: 60px;
+		height: 60px;
+		background: rgba(255, 255, 255, 0.95);
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 30px;
+		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+		animation: savedCheck 0.6s ease-out forwards;
+	}
+
+	@keyframes savedPop {
+		0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+		50% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+		100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+	}
+
+	@keyframes savedCheck {
+		0% { content: ''; }
+		50% { content: ''; }
+		100% { content: '✓'; }
+	}
+
+	.saved-icon::after {
+		content: '✓';
+		color: #000;
+		font-weight: bold;
+	}
+
+	/* Test mode upload */
+	.test-mode-upload {
+		position: absolute;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		gap: 16px;
+		padding: 20px;
+		background: rgba(0, 0, 0, 0.8);
+		z-index: 100;
+	}
+
+	.upload-label {
+		background: #FFCC00;
+		color: #000;
+		padding: 12px 24px;
+		border-radius: 8px;
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	.exit-test-btn {
+		background: rgba(255, 255, 255, 0.2);
+		color: white;
+		padding: 12px 24px;
+		border: none;
+		border-radius: 8px;
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	/* Settings access (subtle) */
+	.settings-access {
+		position: absolute;
+		top: 12px;
+		left: 12px;
+		width: 44px;
+		height: 44px;
+		background: transparent;
+		border: none;
+		color: rgba(255, 255, 255, 0.5);
+		font-size: 20px;
+		cursor: pointer;
+		z-index: 100;
+		opacity: 0;
+		transition: opacity 0.3s;
+	}
+
+	.ios-camera:hover .settings-access,
+	.settings-access:focus {
+		opacity: 1;
+	}
+
+	/* Pose guide overlay */
 	.pose-guide-overlay {
 		position: absolute;
 		top: 0;
@@ -760,266 +1141,36 @@
 		width: 100%;
 		height: 100%;
 		pointer-events: none;
-		animation: fadeIn 0.5s ease-out;
+		z-index: 30;
 	}
 
-	@keyframes fadeIn {
-		from {
-			opacity: 0;
-		}
-		to {
-			opacity: 1;
-		}
-	}
-
-	/* Pose instructions */
-	.pose-instructions {
+	.confidence-indicator {
 		position: absolute;
 		top: 80px;
 		left: 50%;
 		transform: translateX(-50%);
+	}
+
+	.pose-instructions-ios {
+		position: absolute;
+		bottom: 160px;
+		left: 0;
+		right: 0;
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
-		max-width: 80%;
-		pointer-events: none;
+		padding: 0 20px;
 	}
 
-	/* Confidence indicator container */
-	.confidence-indicator-container {
-		position: absolute;
-		top: 20px;
-		right: 20px;
-		z-index: 100;
-		pointer-events: auto;
-		animation: slideInRight 0.5s ease-out;
-	}
-
-	.instruction-item {
-		background: rgba(0, 0, 0, 0.75);
-		backdrop-filter: blur(10px);
-		color: #ffd700;
-		padding: 10px 16px;
-		border-radius: 12px;
-		font-size: 14px;
-		font-weight: 500;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		border: 1px solid rgba(255, 215, 0, 0.3);
-		animation: slideInRight 0.3s ease-out;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-	}
-
-	.instruction-bullet {
-		color: #ffd700;
-		font-weight: bold;
-		font-size: 18px;
-	}
-
-	@keyframes slideInRight {
-		from {
-			opacity: 0;
-			transform: translateX(20px);
-		}
-		to {
-			opacity: 1;
-			transform: translateX(0);
-		}
-	}
-
-	/* AI Coach button */
-	.ai-coach-btn {
-		background: rgba(0, 0, 0, 0.5) !important;
-		border: 2px solid rgba(255, 215, 0, 0.3) !important;
-		transition: all 0.3s ease !important;
-	}
-
-	.ai-coach-btn.active {
-		background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%) !important;
-		border-color: #ffd700 !important;
-		color: #000 !important;
-		font-weight: 600 !important;
-		box-shadow: 0 0 20px rgba(255, 215, 0, 0.5) !important;
-	}
-
-	.top-bar {
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		display: flex;
-		justify-content: space-between;
-		padding: 1rem;
-		gap: 0.5rem;
-		pointer-events: auto;
-	}
-
-	.top-bar button {
-		background: rgba(0, 0, 0, 0.5);
-		border: none;
-		color: white;
-		padding: 0.5rem 1rem;
-		border-radius: 20px;
-		font-size: 0.9rem;
-		cursor: pointer;
-		backdrop-filter: blur(10px);
-		white-space: nowrap;
-	}
-
-	.test-mode-btn {
-		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-	}
-
-	/* Zoom button */
-	.zoom-btn {
-		position: absolute;
-		top: 5rem;
-		right: 1rem;
-		background: rgba(0, 0, 0, 0.6);
-		border: 2px solid rgba(255, 255, 255, 0.3);
-		color: white;
-		padding: 0.5rem 1rem;
-		border-radius: 20px;
-		font-size: 1rem;
-		font-weight: 600;
-		cursor: pointer;
-		pointer-events: auto;
-		backdrop-filter: blur(10px);
-		transition: all 0.2s;
-		min-width: 60px;
-	}
-
-	.zoom-btn:active {
-		transform: scale(0.95);
-		background: rgba(0, 0, 0, 0.8);
-	}
-
-	.ai-suggestion {
-		position: absolute;
-		bottom: 140px;
-		left: 50%;
-		transform: translateX(-50%);
+	.instruction-item-ios {
 		background: rgba(0, 0, 0, 0.7);
 		color: white;
-		padding: 0.75rem 1rem;
-		border-radius: 20px;
-		font-size: 0.9rem;
-		max-width: 80%;
+		padding: 8px 16px;
+		border-radius: 8px;
+		font-size: 14px;
 		text-align: center;
-		pointer-events: auto;
+		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
 		backdrop-filter: blur(10px);
-	}
-
-	.analyzing {
-		opacity: 0.7;
-	}
-
-	.score-good {
-		margin-left: 0.5rem;
-	}
-
-	/* Saved feedback toast */
-	.saved-toast {
-		position: absolute;
-		top: 5rem;
-		left: 50%;
-		transform: translateX(-50%);
-		background: rgba(16, 185, 129, 0.9);
-		color: white;
-		padding: 0.75rem 1.5rem;
-		border-radius: 20px;
-		font-weight: 500;
-		animation: slideIn 0.3s ease-out, fadeOut 0.3s ease-in 1.2s forwards;
-		z-index: 100;
-	}
-
-	@keyframes slideIn {
-		from {
-			opacity: 0;
-			transform: translateX(-50%) translateY(-10px);
-		}
-		to {
-			opacity: 1;
-			transform: translateX(-50%) translateY(0);
-		}
-	}
-
-	@keyframes fadeOut {
-		from {
-			opacity: 1;
-		}
-		to {
-			opacity: 0;
-		}
-	}
-
-	.bottom-controls {
-		position: absolute;
-		bottom: 2rem;
-		left: 0;
-		right: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 2rem;
-		pointer-events: auto;
-	}
-
-	.history-btn-small,
-	.settings-btn-small {
-		width: 44px;
-		height: 44px;
-		border-radius: 50%;
-		background: rgba(0, 0, 0, 0.5);
-		border: none;
-		color: white;
-		font-size: 1.2rem;
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		backdrop-filter: blur(10px);
-	}
-
-	.shutter-btn {
-		width: 70px;
-		height: 70px;
-		border-radius: 50%;
-		background: white;
-		border: 4px solid rgba(255, 255, 255, 0.3);
-		cursor: pointer;
-		transition: transform 0.1s, box-shadow 0.1s;
-	}
-
-	.shutter-btn:active {
-		transform: scale(0.9);
-	}
-
-	.shutter-btn.capturing {
-		opacity: 0.5;
-	}
-
-	.upload-btn {
-		width: 70px;
-		height: 70px;
-		border-radius: 50%;
-		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-		border: 4px solid rgba(255, 255, 255, 0.3);
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		transition: transform 0.1s, box-shadow 0.1s;
-	}
-
-	.upload-btn span {
-		color: white;
-		font-size: 0.8rem;
-	}
-
-	.upload-btn:active {
-		transform: scale(0.9);
 	}
 
 	/* Flash effect */
@@ -1031,11 +1182,46 @@
 		height: 100%;
 		background: white;
 		z-index: 9999;
-		animation: flash 0.1s ease-out;
+		animation: flash 0.1s ease-out forwards;
 	}
 
 	@keyframes flash {
-		from { opacity: 1; }
-		to { opacity: 0; }
+		0% { opacity: 1; }
+		100% { opacity: 0; }
+	}
+
+	/* Responsive adjustments */
+	@media (max-width: 375px) {
+		.shutter-button {
+			width: 64px;
+			height: 64px;
+		}
+
+		.mode-btn {
+			padding: 6px 12px;
+		}
+
+		.mode-icon {
+			font-size: 18px;
+		}
+	}
+
+	@media (min-width: 768px) {
+		.shutter-button {
+			width: 80px;
+			height: 80px;
+		}
+
+		.top-toolbar {
+			padding: 16px 32px;
+		}
+
+		.mode-selector {
+			bottom: 70px;
+		}
+
+		.shutter-container {
+			bottom: 40px;
+		}
 	}
 </style>
