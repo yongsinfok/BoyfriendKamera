@@ -539,35 +539,6 @@
 		</button>
 	</div>
 
-	<!-- Mode selector (bottom) - iOS style -->
-	<div class="mode-selector-ios">
-		<button
-			class="mode-tab-ios"
-			class:active={currentMode === 'video'}
-			on:click={() => currentMode = 'video'}
-		>视频</button>
-		<button
-			class="mode-tab-ios"
-			class:active={currentMode === 'photo'}
-			on:click={() => currentMode = 'photo'}
-		>照片</button>
-		<button
-			class="mode-tab-ios"
-			class:active={currentMode === 'square'}
-			on:click={() => currentMode = 'square'}
-		>拍照</button>
-		<button
-			class="mode-tab-ios"
-			class:active={currentMode === 'portrait'}
-			on:click={() => currentMode = 'portrait'}
-		>人像</button>
-		<button
-			class="mode-tab-ios"
-			class:active={currentMode === 'pano'}
-			on:click={() => currentMode = 'pano'}
-		>全景</button>
-	</div>
-
 	<!-- Shutter button (center bottom) -->
 	<div class="shutter-container">
 		<!-- Photo gallery preview -->
@@ -922,53 +893,6 @@
 		font-size: 11px;
 	}
 
-	/* Mode selector - iOS style */
-	.mode-selector-ios {
-		position: absolute;
-		bottom: 130px;
-		left: 0;
-		right: 0;
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		gap: 4px;
-		padding: 0 16px;
-		z-index: 100;
-	}
-
-	.mode-tab-ios {
-		background: transparent;
-		border: none;
-		color: rgba(255, 255, 255, 0.5);
-		font-size: 13px;
-		font-weight: 500;
-		padding: 8px 12px;
-		cursor: pointer;
-		transition: color 0.2s;
-		position: relative;
-	}
-
-	.mode-tab-ios.active {
-		color: #FFCC00;
-		font-weight: 600;
-	}
-
-	.mode-tab-ios.active::after {
-		content: '';
-		position: absolute;
-		bottom: 0;
-		left: 50%;
-		transform: translateX(-50%);
-		width: 4px;
-		height: 4px;
-		background: #FFCC00;
-		border-radius: 50%;
-	}
-
-	.mode-tab-ios:active {
-		transform: scale(0.95);
-	}
-
 	/* Shutter container */
 	.shutter-container {
 		position: absolute;
@@ -1105,19 +1029,38 @@
 		font-size: 20px;
 	}
 
-	/* AI hint - subtle overlay */
+	/* AI hint - clear and visible */
 	.ai-hint {
 		position: absolute;
-		bottom: 150px;
-		left: 0;
-		right: 0;
+		top: 80px;
+		left: 50%;
+		transform: translateX(-50%);
+		max-width: 90%;
 		text-align: center;
-		padding: 0 20px;
-		color: rgba(255, 255, 255, 0.7);
-		font-size: 14px;
-		text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+		padding: 14px 20px;
+		background: rgba(0, 0, 0, 0.75);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
+		color: white;
+		font-size: 16px;
+		font-weight: 500;
+		line-height: 1.5;
+		border-radius: 16px;
+		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 		pointer-events: none;
-		z-index: 50;
+		z-index: 80;
+		animation: aiHintFadeIn 0.3s ease-out;
+	}
+
+	@keyframes aiHintFadeIn {
+		from {
+			opacity: 0;
+			transform: translateX(-50%) translateY(-10px);
+		}
+		to {
+			opacity: 1;
+			transform: translateX(-50%) translateY(0);
+		}
 	}
 
 	/* Saved feedback animation */
