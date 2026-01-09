@@ -603,11 +603,6 @@
 		</div>
 	{/if}
 
-	<!-- Settings access (long press or hidden) -->
-	<button class="settings-access" on:click={goToSettings} aria-label="设置">
-		⚙️
-	</button>
-
 	<!-- Performance metrics -->
 	<PerformanceMetrics visible={true} position="top-right" />
 </div>
@@ -1136,28 +1131,6 @@
 		border-radius: 8px;
 		font-weight: 600;
 		cursor: pointer;
-	}
-
-	/* Settings access (subtle) */
-	.settings-access {
-		position: absolute;
-		top: 12px;
-		left: 12px;
-		width: 44px;
-		height: 44px;
-		background: transparent;
-		border: none;
-		color: rgba(255, 255, 255, 0.5);
-		font-size: 20px;
-		cursor: pointer;
-		z-index: 100;
-		opacity: 0;
-		transition: opacity 0.3s;
-	}
-
-	.ios-camera:hover .settings-access,
-	.settings-access:focus {
-		opacity: 1;
 	}
 
 	/* Pose guide overlay */
