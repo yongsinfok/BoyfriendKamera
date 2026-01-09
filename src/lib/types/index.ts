@@ -184,10 +184,16 @@ export interface Pose {
 	right_ankle?: PoseKeypoint;
 }
 
-// AI姿态指导
+// AI姿态指导（增强版）
 export interface PoseGuide {
 	target_pose: Pose; // 目标骨架（建议的姿势）
 	current_pose?: Pose; // 当前检测到的骨架
 	instructions: string[]; // 具体的调整指令
 	confidence: number; // AI的置信度
+	difficulty?: number; // 姿势难度（1-5）
+	common_mistake?: { // 常见错误提示
+		mistake: string;
+		correction: string;
+	};
+	step_by_step?: string[]; // 分步指导
 }
