@@ -118,7 +118,7 @@
 		}
 	}
 
-	// AI Analysis loop - every 2 seconds
+	// AI Analysis loop - every 2.5 seconds for better battery life
 	function startAnalysisLoop() {
 		if (analysisInterval) clearInterval(analysisInterval);
 
@@ -130,7 +130,10 @@
 
 			try {
 				isAnalyzing.set(true);
-				const base64Frame = captureFrame(videoElement, 0.5);
+				// Use adaptive quality: faster models get lower resolution
+				const isFlashModel = ($defaultModel || 'glm-4.6v-flash').includes('flash');
+				const quality = isFlashModel ? 0.4 : 0.5; // Lower quality for flash models
+				const base64Frame = captureFrame(videoElement, quality);
 
 				// Use the selected model from settings
 				const model = $defaultModel || 'glm-4.6v-flash';
@@ -146,10 +149,20 @@
 				}
 			} catch (err) {
 				console.error('AI analysis failed:', err);
+				// Show error in suggestion only if it's a critical error
+				if (err instanceof Error && err.message.includes('API')) {
+					aiSuggestion.set({
+						composition_suggestion: 'API错误，请检查配置',
+						lighting_assessment: '',
+						angle_suggestion: '',
+						overall_score: 0,
+						should_vibrate: false
+					});
+				}
 			} finally {
 				isAnalyzing.set(false);
 			}
-		}, 2000) as unknown as number;
+		}, 2500) as unknown as number; // Increased from 2000ms to 2500ms
 	}
 
 	// Stop analysis loop (for battery optimization when page is hidden)
@@ -380,6 +393,8 @@
 					{#each $aiSuggestion.guide_lines as guide}
 						{#if guide.type === 'standing_position' && guide.x !== undefined && guide.y !== undefined}
 							<div class="position-indicator" style="left: {guide.x * 100}%; top: {guide.y * 100}%;"></div>
+							<!-- Directional arrows to show movement -->
+							<div class="position-arrows" style="left: {guide.x * 100}%; top: {guide.y * 100}%;"></div>
 						{/if}
 					{/each}
 				{/if}
@@ -540,24 +555,75 @@
 	/* Position indicator circle */
 	.position-indicator {
 		position: absolute;
-		width: 60px;
-		height: 60px;
+		width: 80px;
+		height: 80px;
 		transform: translate(-50%, -50%);
-		border: 3px solid rgba(255, 215, 0, 0.8);
+		border: 4px solid rgba(255, 215, 0, 0.9);
 		border-radius: 50%;
-		background: rgba(255, 215, 0, 0.1);
-		box-shadow: 0 0 20px rgba(255, 215, 0, 0.5), inset 0 0 10px rgba(255, 215, 0, 0.3);
-		animation: pulse 2s ease-in-out infinite;
+		background: radial-gradient(circle, rgba(255, 215, 0, 0.2) 0%, rgba(255, 215, 0, 0.05) 70%, transparent 100%);
+		box-shadow: 0 0 30px rgba(255, 215, 0, 0.6), inset 0 0 15px rgba(255, 215, 0, 0.4);
+		animation: pulse 2s ease-in-out infinite, glow 1.5s ease-in-out infinite alternate;
 		pointer-events: none;
+	}
+
+	/* Position arrows */
+	.position-arrows {
+		position: absolute;
+		width: 100px;
+		height: 100px;
+		transform: translate(-50%, -50%);
+		pointer-events: none;
+	}
+
+	.position-arrows::before,
+	.position-arrows::after {
+		content: '';
+		position: absolute;
+		background: rgba(255, 215, 0, 0.8);
+		animation: arrowPulse 1.5s ease-in-out infinite;
+	}
+
+	.position-arrows::before {
+		width: 2px;
+		height: 20px;
+		top: -15px;
+		left: 50%;
+		transform: translateX(-50%);
+	}
+
+	.position-arrows::after {
+		width: 20px;
+		height: 2px;
+		left: -15px;
+		top: 50%;
+		transform: translateY(-50%);
 	}
 
 	@keyframes pulse {
 		0%, 100% {
 			transform: translate(-50%, -50%) scale(1);
-			opacity: 0.8;
+			opacity: 0.9;
 		}
 		50% {
-			transform: translate(-50%, -50%) scale(1.1);
+			transform: translate(-50%, -50%) scale(1.15);
+			opacity: 1;
+		}
+	}
+
+	@keyframes glow {
+		0% {
+			box-shadow: 0 0 30px rgba(255, 215, 0, 0.6), inset 0 0 15px rgba(255, 215, 0, 0.4);
+		}
+		100% {
+			box-shadow: 0 0 50px rgba(255, 215, 0, 0.8), inset 0 0 20px rgba(255, 215, 0, 0.5);
+		}
+	}
+
+	@keyframes arrowPulse {
+		0%, 100% {
+			opacity: 0.6;
+		}
+		50% {
 			opacity: 1;
 		}
 	}

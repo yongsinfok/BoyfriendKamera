@@ -32,7 +32,10 @@ export class GLMService {
 		this.apiKey = apiKey;
 	}
 
-	private async call(messages: GLMMessage[], imageUrl?: string): Promise<string> {
+	private async call(messages: GLMMessage[], imageUrl?: string, retryCount: number = 0): Promise<string> {
+		const MAX_RETRIES = 2;
+		const RETRY_DELAY = 1000; // 1 second
+
 		// Ensure imageUrl has the data URL prefix if it's just base64
 		let formattedImageUrl = imageUrl;
 		if (imageUrl && !imageUrl.startsWith('data:')) {
@@ -50,74 +53,99 @@ export class GLMService {
 			max_tokens: 1024
 		};
 
-		const response = await fetch(GLM_API_BASE, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				'Authorization': `Bearer ${this.apiKey}`
-			},
-			body: JSON.stringify(requestBody)
-		});
+		try {
+			const response = await fetch(GLM_API_BASE, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'Authorization': `Bearer ${this.apiKey}`
+				},
+				body: JSON.stringify(requestBody)
+			});
 
-		if (!response.ok) {
-			const errorText = await response.text();
-			console.error('GLM API Error:', response.status, errorText);
-			throw new Error(`GLM API error: ${response.status} - ${errorText}`);
+			if (!response.ok) {
+				const errorText = await response.text();
+				console.error('GLM API Error:', response.status, errorText);
+
+				// Retry on 5xx errors or rate limiting (429)
+				if ((response.status >= 500 || response.status === 429) && retryCount < MAX_RETRIES) {
+					console.log(`Retrying... (${retryCount + 1}/${MAX_RETRIES})`);
+					await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (retryCount + 1)));
+					return this.call(messages, imageUrl, retryCount + 1);
+				}
+
+				throw new Error(`GLM API error: ${response.status} - ${errorText}`);
+			}
+
+			const data: GLMResponse = await response.json();
+
+			// Validate response
+			if (!data.choices || data.choices.length === 0 || !data.choices[0]?.message?.content) {
+				throw new Error('Invalid API response: No content returned');
+			}
+
+			return data.choices[0].message.content;
+		} catch (error) {
+			// Retry on network errors
+			if (error instanceof TypeError && retryCount < MAX_RETRIES) {
+				console.log(`Network error, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
+				await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (retryCount + 1)));
+				return this.call(messages, imageUrl, retryCount + 1);
+			}
+			throw error;
 		}
-
-		const data: GLMResponse = await response.json();
-		return data.choices[0]?.message?.content || '';
 	}
 
 	// Real-time guidance analysis
 	async analyzeFrame(imageBase64: string, style?: string): Promise<AISuggestion> {
-		const styleHint = style ? `\n目标风格：${style}。` : '';
+		const styleHint = style ? `\n目标风格：${style}。请特别关注这种风格的构图特点。` : '';
 		const prompt = `你是一个专业且友好的拍照助手。${styleHint}
 
-**任务：分析当前画面，给出具体的拍照改进建议**
+**任务：精确分析当前画面，给出具体的拍照改进建议**
 
-评价标准（严格但有礼貌）：
-1. 构图：人物是否居中、位置是否合适、背景是否干净
-2. 光线：是否过曝/欠曝、有没有逆光、光线方向
-3. 角度：角度是否太平、太高或太低
-4. 比例：人物在画面中大小是否合适
+请按照以下标准严格评分（0-100分）：
+1. 构图（40分）：人物位置、三分法运用、背景简洁度
+2. 光线（30分）：曝光准确性、光线方向、阴影处理
+3. 角度（20分）：拍摄角度是否合适、是否变形
+4. 比例（10分）：人物在画面中的大小是否合适
 
-**重要原则：**
-- 总能找到可以改进的地方（具体、可操作）
-- 不要敷衍地说"很好"，除非构图真的完美
-- 建议要具体："往左移一步" 比 "调整位置" 更好
-- 15字以内
-- **必须同时返回九宫格位置建议！**
+**输出要求（严格遵守）：**
+1. 必须返回JSON格式
+2. 建议必须具体、可操作
+3. 总分低于70分时，必须给出改进建议
+4. 总分70-85分时，给出1-2个小建议
+5. 总分85分以上时，可以表示满意但不要说"完美"
 
-示例：
-- "往左移一步，现在太靠右" + 位置 "right-middle"
-- "往下蹲一点，角度会更好" + 位置 "center"
-- "光线太暗，找个亮点的位置" + 位置 "center"
-- "退后一步，人太小了" + 位置 "center"
-- "稍微抬头，避免双下巴" + 位置 "center-top"
-- "背景太乱，换个方向拍" + 位置 "left-middle"
-- "现在逆光了，转到侧面" + 位置 "right-bottom"
-- "手机拿高一点，俯拍更瘦" + 位置 "center-bottom"
-- "✨ 这个角度完美，拍吧" + 位置 "center"（只在真的很好时）
-
-**必须以JSON格式返回：**
+**JSON格式：**
 {
-  "suggestion": "具体的拍照建议（15字以内）",
-  "grid_position": "九宫格位置，用以下值之一：center-top, center, center-bottom, left-top, left-middle, left-bottom, right-top, right-middle, right-bottom"
+  "score": 85,
+  "suggestion": "具体的拍照建议（15字以内，必须包含方向性词汇）",
+  "grid_position": "九宫格位置：center-top/center/center-bottom/left-top/left-middle/left-bottom/right-top/right-middle/right-bottom",
+  "issues": ["主要问题1", "主要问题2"],
+  "confidence": 0.9
 }
 
-九宫格位置说明：
-- center: 正中心
-- center-top: 上方中间
-- center-bottom: 下方中间
-- left-top: 左上角
-- left-middle: 左侧中间
-- left-bottom: 左下角
-- right-top: 右上角
-- right-middle: 右侧中间
-- right-bottom: 右下角
+**位置判断规则：**
+- center: 人物在正中央，适合对称构图
+- center-top: 人物偏上，留出下方空间
+- center-bottom: 人物偏下，留出上方空间
+- left-middle: 人物在左侧三分之一处（经典三分法）
+- right-middle: 人物在右侧三分之一处（经典三分法）
+- left-top/right-top: 人物在角落，对角线构图
+- left-bottom/right-bottom: 人物在角落，低角度构图
 
-**用户需要的是具体指导，不是敷衍的鼓励！给出有价值的建议！**`;
+**建议示例（按分数）：**
+- 60分: {"score": 60, "suggestion": "往左移一步，现在太靠右", "grid_position": "left-middle", "issues": ["人物偏离中心", "背景杂乱"], "confidence": 0.95}
+- 75分: {"score": 75, "suggestion": "稍往左移会更好", "grid_position": "left-middle", "issues": ["构图略有偏移"], "confidence": 0.85}
+- 88分: {"score": 88, "suggestion": "✨ 构图不错，可以拍了", "grid_position": "center", "issues": [], "confidence": 0.92}
+
+**重要：**
+- confidence表示你的判断确信程度（0-1之间）
+- 只在你真的非常确定时才给出高confidence
+- 当画面模糊或光线太暗时，降低confidence
+- 如果检测不到人脸或主体，confidence设为0.3以下
+
+现在分析这张照片并返回JSON：`;
 
 		const response = await this.call([{ role: 'user', content: prompt }], imageBase64);
 
@@ -134,9 +162,11 @@ export class GLMService {
 			.replace(/^(composition_suggestion|suggestion|text)[:：]\s*/i, '')
 			.trim();
 
-		// Try to parse JSON response
+		// Try to parse JSON response with enhanced fields
 		let suggestionText = cleanText;
 		let gridPosition = 'center'; // Default position
+		let confidence = 0.7; // Default confidence
+		let score = 60; // Default score
 		let guideLines: { type: string; x?: number; y?: number }[] = [];
 
 		try {
@@ -146,11 +176,15 @@ export class GLMService {
 				const parsed = JSON.parse(jsonMatch[0]);
 				suggestionText = parsed.suggestion || suggestionText;
 				gridPosition = parsed.grid_position || 'center';
+				confidence = parsed.confidence ?? 0.7;
+				score = parsed.score ?? 60;
 			} else {
 				// Try to parse the entire response as JSON
 				const parsed = JSON.parse(cleanText);
 				suggestionText = parsed.suggestion || parsed.composition_suggestion || suggestionText;
 				gridPosition = parsed.grid_position || 'center';
+				confidence = parsed.confidence ?? 0.7;
+				score = parsed.score ?? 60;
 			}
 		} catch {
 			// If JSON parsing fails, use the text as is
@@ -182,15 +216,23 @@ export class GLMService {
 			y: pos.y
 		}];
 
-		// Determine if photo is good based on response
-		// More lenient: just having ✨ or positive words is enough
-		const isGood = suggestionText.includes('✨') || suggestionText.includes('很好') || suggestionText.includes('不错') || suggestionText.includes('可以了') || suggestionText.includes('拍吧');
+		// Normalize score to 0-1 range
+		const normalizedScore = Math.min(1, Math.max(0, score / 100));
+
+		// Determine if photo is good based on score and confidence
+		// Only vibrate if score is good (85+) AND confidence is high (0.7+)
+		const isGood = score >= 85 && confidence >= 0.7;
+
+		// Add confidence indicator to suggestion if low
+		if (confidence < 0.5 && suggestionText && !suggestionText.includes('(分析不确定)')) {
+			suggestionText += ' (分析不确定)';
+		}
 
 		return {
 			composition_suggestion: suggestionText || '准备拍照中...',
 			lighting_assessment: '',
 			angle_suggestion: '',
-			overall_score: isGood ? 0.85 : 0.6,
+			overall_score: normalizedScore,
 			should_vibrate: isGood,
 			guide_lines: guideLines
 		};
