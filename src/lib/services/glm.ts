@@ -120,28 +120,32 @@ export class GLMService {
 {
   "score": 85,
   "suggestion": "具体的拍照建议（15字以内，必须包含方向性词汇）",
-  "grid_position": "九宫格位置：center-top/center/center-bottom/left-top/left-middle/left-bottom/right-top/right-middle/right-bottom",
+  "grid_position": "目标位置（金色光圈位置，用户应该把人物移动到的九宫格位置）",
   "issues": ["主要问题1", "主要问题2"],
   "confidence": 0.9
 }
 
-**位置判断规则：**
-- center: 人物在正中央，适合对称构图
-- center-top: 人物偏上，留出下方空间
-- center-bottom: 人物偏下，留出上方空间
-- left-middle: 人物在左侧三分之一处（经典三分法）
-- right-middle: 人物在右侧三分之一处（经典三分法）
-- left-top/right-top: 人物在角落，对角线构图
-- left-bottom/right-bottom: 人物在角落，低角度构图
+**grid_position说明（目标位置）：**
+这个位置是**金色光圈应该显示的位置**，告诉用户"把人物移到这里"：
+- center: 移到画面正中央（对称构图）
+- center-top: 移到上方，留出下方空间
+- center-bottom: 移到下方，留出上方空间
+- left-middle: 移到左侧三分之一处（经典三分法）
+- right-middle: 移到右侧三分之一处（经典三分法）
+- left-top/right-top: 移到角落（对角线构图）
+- left-bottom/right-bottom: 移到角落（低角度构图）
 
 **建议示例（按分数）：**
-- 60分: {"score": 60, "suggestion": "往左移一步，现在太靠右", "grid_position": "left-middle", "issues": ["人物偏离中心", "背景杂乱"], "confidence": 0.95}
-- 75分: {"score": 75, "suggestion": "稍往左移会更好", "grid_position": "left-middle", "issues": ["构图略有偏移"], "confidence": 0.85}
-- 88分: {"score": 88, "suggestion": "✨ 构图不错，可以拍了", "grid_position": "center", "issues": [], "confidence": 0.92}
+- 人物太靠右，建议往左移：{"score": 60, "suggestion": "把人物移到左侧光圈里", "grid_position": "left-middle", "issues": ["人物太靠右"], "confidence": 0.95}
+- 人物太靠左，建议往右移：{"score": 60, "suggestion": "把人物移到右侧光圈里", "grid_position": "right-middle", "issues": ["人物太靠左"], "confidence": 0.95}
+- 人物太小：{"score": 65, "suggestion": "走近点，站到光圈里", "grid_position": "center", "issues": ["人物太小"], "confidence": 0.9}
+- 构图不错：{"score": 88, "suggestion": "✨ 位置完美，可以拍了", "grid_position": "center", "issues": [], "confidence": 0.92}
 
 **重要：**
+- grid_position是**建议移动到的目标位置**，不是当前位置
+- 金色光圈会显示在grid_position位置，引导用户移动人物
+- 建议中必须提到"光圈"让用户明白要移到金色圆圈位置
 - confidence表示你的判断确信程度（0-1之间）
-- 只在你真的非常确定时才给出高confidence
 - 当画面模糊或光线太暗时，降低confidence
 - 如果检测不到人脸或主体，confidence设为0.3以下
 

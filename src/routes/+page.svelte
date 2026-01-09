@@ -395,6 +395,11 @@
 							<div class="position-indicator" style="left: {guide.x * 100}%; top: {guide.y * 100}%;"></div>
 							<!-- Directional arrows to show movement -->
 							<div class="position-arrows" style="left: {guide.x * 100}%; top: {guide.y * 100}%;"></div>
+							<!-- Label to indicate this is the target position -->
+							<div class="position-label" style="left: {guide.x * 100}%; top: {guide.y * 100}%;">
+								<span class="label-icon">📍</span>
+								<span class="label-text">移到这里</span>
+							</div>
 						{/if}
 					{/each}
 				{/if}
@@ -625,6 +630,55 @@
 		}
 		50% {
 			opacity: 1;
+		}
+	}
+
+	/* Position label */
+	.position-label {
+		position: absolute;
+		transform: translate(-50%, -100%);
+		margin-top: -55px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 4px;
+		pointer-events: none;
+		animation: fadeInScale 0.5s ease-out;
+	}
+
+	.label-icon {
+		font-size: 24px;
+		animation: bounce 1s ease-in-out infinite;
+	}
+
+	.label-text {
+		background: rgba(255, 215, 0, 0.9);
+		color: #000;
+		padding: 4px 10px;
+		border-radius: 12px;
+		font-size: 12px;
+		font-weight: 600;
+		white-space: nowrap;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+	}
+
+	@keyframes bounce {
+		0%, 100% {
+			transform: translateY(0);
+		}
+		50% {
+			transform: translateY(-5px);
+		}
+	}
+
+	@keyframes fadeInScale {
+		from {
+			opacity: 0;
+			transform: translate(-50%, -100%) scale(0.5);
+		}
+		to {
+			opacity: 1;
+			transform: translate(-50%, -100%) scale(1);
 		}
 	}
 
