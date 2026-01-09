@@ -5,6 +5,7 @@
 	import { isAnalyzing, aiSuggestion, createSession, addPhotoToSession, currentSession, currentPhotoCount } from '$lib/stores/camera';
 	import { getGLMService, captureFrame } from '$lib/services/glm';
 	import PoseSkeleton from '$lib/components/PoseSkeleton.svelte';
+	import PoseConfidenceIndicator from '$lib/components/PoseConfidenceIndicator.svelte';
 
 	let videoElement: HTMLVideoElement;
 	let stream: MediaStream | null = null;
@@ -433,6 +434,16 @@
 			<div class="pose-guide-overlay">
 				<PoseSkeleton pose={$aiSuggestion.pose_guide.target_pose} opacity={0.9} />
 
+				<!-- Confidence indicator -->
+				{#if $aiSuggestion.pose_guide.confidence !== undefined}
+					<div class="confidence-indicator-container">
+						<PoseConfidenceIndicator
+							confidence={$aiSuggestion.pose_guide.confidence}
+							label="姿势准确度"
+						/>
+					</div>
+				{/if}
+
 				<!-- Pose instruction labels -->
 				{#if $aiSuggestion.pose_guide.instructions && $aiSuggestion.pose_guide.instructions.length > 0}
 					<div class="pose-instructions">
@@ -758,6 +769,16 @@
 		gap: 8px;
 		max-width: 80%;
 		pointer-events: none;
+	}
+
+	/* Confidence indicator container */
+	.confidence-indicator-container {
+		position: absolute;
+		top: 20px;
+		right: 20px;
+		z-index: 100;
+		pointer-events: auto;
+		animation: slideInRight 0.5s ease-out;
 	}
 
 	.instruction-item {

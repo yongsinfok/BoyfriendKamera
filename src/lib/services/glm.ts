@@ -1,4 +1,4 @@
-import type { AISuggestion, PhotoAnalysis, StyleProfile } from '$lib/types';
+import type { AISuggestion, PhotoAnalysis, StyleProfile, GuideLine, Pose, PoseKeypoint } from '$lib/types';
 
 const GLM_API_BASE = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
 
@@ -171,7 +171,7 @@ export class GLMService {
 		let gridPosition = 'center'; // Default position
 		let confidence = 0.7; // Default confidence
 		let score = 60; // Default score
-		let guideLines: { type: string; x?: number; y?: number }[] = [];
+		let guideLines: GuideLine[] = [];
 
 		try {
 			// First try to match JSON in the response
@@ -244,54 +244,127 @@ export class GLMService {
 
 	// AI Pose Coach - Analyze frame and return pose guidance
 	async analyzePose(imageBase64: string, style?: string): Promise<AISuggestion> {
-		const styleHint = style ? `\n目标风格：${style}。` : '';
-		const prompt = `你是一个专业的拍照姿势教练。${styleHint}
+		const styleHint = style ? `\n目标风格：${style}。根据这种风格的特点调整姿势建议。` : '';
+		const prompt = `你是一个世界级的专业拍照姿势教练和摄影指导。${styleHint}
 
-**任务：分析当前画面中人物的姿势，生成一个更好的目标姿势骨架**
+**任务：精确分析当前画面，生成完美的目标姿势骨架**
 
-请分析画面中人物（如果有），然后：
-1. 识别当前人物的姿势
-2. 生成一个更美观、更自然的目标姿势
-3. 给出具体的调整指导
+请仔细分析画面中的每一个人，然后：
+1. 精确识别当前人物的所有身体部位位置
+2. 基于专业摄影美学原则，生成完美的目标姿势
+3. 提供具体、可操作的调整指导
 
-**JSON格式返回：**
+**评分标准（总分100）：**
+1. 姿态自然度（30分）：动作是否自然、不僵硬
+2. 构图美学（30分）：是否符合三分法、对角线、三角形等美学原则
+3. 表情状态（20分）：表情是否生动、自然
+4. 整体协调性（20分）：身体各部位是否协调统一
+
+**JSON格式返回（必须严格遵循）：**
 {
-  "score": 85,
-  "suggestion": "姿势调整建议（20字以内）",
-  "target_pose": {
-    "nose": {"x": 0.5, "y": 0.3, "visibility": 1.0},
-    "left_shoulder": {"x": 0.4, "y": 0.45, "visibility": 1.0},
-    "right_shoulder": {"x": 0.6, "y": 0.45, "visibility": 1.0},
-    "left_elbow": {"x": 0.35, "y": 0.55, "visibility": 0.9},
-    "right_elbow": {"x": 0.65, "y": 0.55, "visibility": 0.9},
-    "left_wrist": {"x": 0.3, "y": 0.65, "visibility": 0.8},
-    "right_wrist": {"x": 0.7, "y": 0.65, "visibility": 0.8},
-    "left_hip": {"x": 0.42, "y": 0.7, "visibility": 0.95},
-    "right_hip": {"x": 0.58, "y": 0.7, "visibility": 0.95}
+  "score": 88,
+  "suggestion": "具体建议（15字内，提到身体部位）",
+  "current_pose_analysis": {
+    "detected": true,
+    "people_count": 1,
+    "body_visibility": "full",
+    "posture_quality": "fair"
   },
-  "instructions": [
-    "左手稍微抬高一点",
-    "头部向右微倾",
-    "肩膀放松下沉"
+  "target_pose": {
+    "nose": {"x": 0.5, "y": 0.22, "visibility": 1.0},
+    "left_shoulder": {"x": 0.42, "y": 0.4, "visibility": 1.0},
+    "right_shoulder": {"x": 0.58, "y": 0.4, "visibility": 1.0},
+    "left_elbow": {"x": 0.35, "y": 0.52, "visibility": 0.95},
+    "right_elbow": {"x": 0.65, "y": 0.52, "visibility": 0.95},
+    "left_wrist": {"x": 0.28, "y": 0.35, "visibility": 0.9},
+    "right_wrist": {"x": 0.72, y": 0.62, "visibility": 0.9},
+    "left_hip": {"x": 0.43, "y": 0.68, "visibility": 0.98},
+    "right_hip": {"x": 0.57, "y": 0.68, "visibility": 0.98},
+    "left_knee": {"x": 0.44, "y": 0.82, "visibility": 0.85},
+    "right_knee": {"x": 0.56, "y": 0.82, "visibility": 0.85}
+  },
+  "adjustments": [
+    {"body_part": "左手", "action": "抬高5厘米", "reason": "形成更好的构图线"},
+    {"body_part": "头部", "action": "向右倾斜15度", "reason": "展现更优美的面部轮廓"},
+    {"body_part": "肩膀", "action": "放松下沉", "reason": "姿态更自然"}
   ],
-  "confidence": 0.85
+  "confidence": 0.92
 }
 
-**重要规则：**
-1. 所有坐标使用0-1之间的归一化值（x从左到右，y从上到下）
-2. visibility表示可见度（0-1），看不到或不确定时设为低值
-3. 如果画面中没有人物，score设为0，返回空target_pose
-4. 姿势建议要具体、可执行
-5. 目标姿势要符合美学原则（三分法、对角线、三角形构图等）
+**坐标系统说明（极重要）：**
+- x: 0.0（画面最左）到 1.0（画面最右）
+- y: 0.0（画面最上）到 1.0（画面最下）
+- 所有坐标必须是0-1之间的精确值，保留2-3位小数
+- visibility: 0.0（完全不可见）到 1.0（完全确定可见）
 
-**常见姿势模板：**
-- 自然站立：双臂自然下垂，肩膀放松
-- 优雅手势：一只手轻抚头发或脸颊，另一只手自然下垂
-- 活力姿势：双臂举起，做出V字或张开动作
-- 侧身姿势：身体侧转45度，头部转向相机
-- 坐姿：上半身挺直，双手放在膝盖上
+**专业姿势知识库：**
 
-现在分析并返回JSON：`;
+1. **头部位置**（nose, left_eye, right_eye, left_ear, right_ear）：
+   - 自然视角：nose在 y=0.2-0.3 之间
+   - 略微倾斜：x偏移0.05-0.1
+   - 抬头/低头：上下浮动0.05
+
+2. **肩膀线条**（left_shoulder, right_shoulder）：
+   - 平行画面：y值相同
+   - 自然放松：y在0.38-0.42之间
+   - 宽度：左右间距0.16-0.2（x坐标）
+
+3. **手臂姿态**（elbow, wrist）：
+   - 自然下垂：elbow在shoulder下方0.1-0.15
+   - 举起姿势：elbow在shoulder水平或稍高
+   - 优雅手势：手腕靠近头部或脸颊
+
+4. **躯干核心**（hip）：
+   - 腰线位置：y在0.65-0.72之间
+   - 宽度：左右间距0.12-0.16
+   - 重心稳定：确保身体平衡
+
+5. **下半身**（knee, ankle）：
+   - 全身照：knee在y=0.8-0.85
+   - 腿部间距：与髋部对齐或稍窄
+
+**美学构图原则：**
+- 三分法：主体在横向或纵向三分之一处
+- 对角线：身体或手臂形成对角线
+- 三角形：手臂和身体形成稳定三角形
+- 黄金螺旋：身体姿态符合黄金比例
+- 留白原则：画面不要填满，留出呼吸空间
+
+**常见最佳姿势模板：**
+
+1. **自然优雅**（推荐新手）：
+   - 双肩放松下沉
+   - 一只手轻触头发或脸颊
+   - 头部微微倾斜5-10度
+   - 身体侧转15-20度
+
+2. **活力青春**：
+   - 双臂向上举起呈V字
+   - 肩膀打开，展现自信
+   - 头部抬起，眼神向上
+   - 膝盖微弯，充满动感
+
+3. **文艺气质**：
+   - 身体侧转45度
+   - 一手叉腰，一手自然下垂
+   - 头部略低，眼神向下
+   - 整体形成优雅曲线
+
+4. **亲密情侣**：
+   - 两人靠近，肩膀相触
+   - 头部向内倾斜
+   - 前面人手放在后面人肩上
+   - 形成稳定的三角形构图
+
+**输出要求：**
+1. 必须返回完整的目标姿势骨架（至少包含9个关键点）
+2. 坐标必须精确到小数点后2-3位
+3. visibility值必须根据实际可见度设置
+4. 调整建议必须包含具体的身体部位和动作
+5. 如果检测不到人物，score设为0，target_pose为空对象
+6. confidence必须反映你的判断确信程度（0-1之间）
+
+现在开始专业分析并返回JSON：`;
 
 		const response = await this.call([{ role: 'user', content: prompt }], imageBase64);
 
@@ -302,7 +375,7 @@ export class GLMService {
 			.replace(/\n+/g, ' ')
 			.trim();
 
-		// Try to parse JSON response
+		// Try to parse enhanced JSON response
 		let suggestionText = 'AI正在分析姿势...';
 		let confidence = 0.7;
 		let score = 60;
@@ -316,18 +389,32 @@ export class GLMService {
 			confidence = parsed.confidence ?? 0.7;
 			score = parsed.score ?? 60;
 			targetPose = parsed.target_pose || {};
-			instructions = parsed.instructions || [];
 
-			// Create pose guide object
+			// Enhanced instruction parsing from adjustments array
+			if (parsed.adjustments && Array.isArray(parsed.adjustments)) {
+				instructions = parsed.adjustments.map((adj: any) => {
+					if (typeof adj === 'string') return adj;
+					return `${adj.body_part}${adj.action}（${adj.reason}）`;
+				});
+			} else if (parsed.instructions) {
+				instructions = parsed.instructions;
+			}
+
+			// Validate pose coordinates
+			targetPose = this.validatePoseCoordinates(targetPose);
+
+			// Create enhanced pose guide object
 			if (Object.keys(targetPose).length > 0) {
 				poseGuide = {
 					target_pose: targetPose,
+					current_pose: parsed.current_pose_analysis,
 					instructions: instructions,
 					confidence: confidence
 				};
 			}
 		} catch {
 			// If parsing fails, return basic suggestion
+			console.error('Failed to parse pose JSON:', cleanText);
 			suggestionText = cleanText || '姿势分析中...';
 		}
 
@@ -343,6 +430,30 @@ export class GLMService {
 			pose_guide: poseGuide,
 			voice_instruction: instructions.join('，')
 		};
+	}
+
+	// Validate and normalize pose coordinates
+	private validatePoseCoordinates(pose: any): any {
+		const validated: any = {};
+
+		for (const [key, value] of Object.entries(pose)) {
+			if (value && typeof value === 'object') {
+				const x = (value as any).x;
+				const y = (value as any).y;
+				const visibility = (value as any).visibility;
+
+				// Validate and clamp coordinates to [0, 1] range
+				if (typeof x === 'number' && typeof y === 'number') {
+					validated[key] = {
+						x: Math.max(0, Math.min(1, x)),
+						y: Math.max(0, Math.min(1, y)),
+						visibility: typeof visibility === 'number' ? Math.max(0, Math.min(1, visibility)) : 0.8
+					};
+				}
+			}
+		}
+
+		return validated;
 	}
 
 	// Photo selection analysis

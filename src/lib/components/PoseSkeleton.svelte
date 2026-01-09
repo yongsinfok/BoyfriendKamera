@@ -1,8 +1,96 @@
 <script lang="ts">
-	import type { Pose } from '$lib/types';
+	import type { Pose, PoseKeypoint } from '$lib/types';
+	import { onMount } from 'svelte';
+	import { quintInOut } from 'svelte/easing';
 
-	export let pose: Pose;
-	export let opacity: number = 0.8;
+	interface Props {
+		pose: Pose;
+		opacity?: number;
+		transitionDuration?: number;
+	}
+
+	let { pose, opacity = 0.8, transitionDuration = 300 }: Props = $props();
+
+	// Store for smooth interpolation
+	let currentPose: Pose = $state(pose);
+	let previousPose: Pose | null = null;
+	let transitioning = false;
+
+	// Linear interpolation between two values
+	const lerp = (start: number, end: number, t: number): number => {
+		return start + (end - start) * t;
+	};
+
+	// Interpolate between two keypoints
+	const lerpKeypoint = (
+		start: PoseKeypoint | undefined,
+		end: PoseKeypoint | undefined,
+		t: number
+	): PoseKeypoint | undefined => {
+		if (!start && !end) return undefined;
+		if (!start) return end;
+		if (!end) return start;
+		return {
+			x: lerp(start.x, end.x, t),
+			y: lerp(start.y, end.y, t),
+			visibility: lerp(start.visibility || 0, end.visibility || 0, t)
+		};
+	};
+
+	// Smoothly interpolate entire pose
+	const lerpPose = (start: Pose, end: Pose, t: number): Pose => {
+		const result: Pose = {};
+		const allKeys = new Set([...Object.keys(start), ...Object.keys(end)]);
+
+		for (const key of allKeys) {
+			result[key as keyof Pose] = lerpKeypoint(
+				start[key as keyof Pose],
+				end[key as keyof Pose],
+				t
+			);
+		}
+		return result;
+	};
+
+	// Transition animation
+	let animationFrame: number;
+	let startTime: number;
+
+	const animateTransition = (timestamp: number) => {
+		if (!startTime) startTime = timestamp;
+		const elapsed = timestamp - startTime;
+		const progress = Math.min(elapsed / transitionDuration, 1);
+		const easedProgress = quintInOut(progress);
+
+		if (previousPose) {
+			currentPose = lerpPose(previousPose, pose, easedProgress);
+		}
+
+		if (progress < 1) {
+			animationFrame = requestAnimationFrame(animateTransition);
+		} else {
+			transitioning = false;
+			currentPose = pose;
+		}
+	};
+
+	// Watch for pose changes
+	$effect(() => {
+		if (pose !== currentPose && !transitioning) {
+			previousPose = currentPose;
+			transitioning = true;
+			startTime = 0;
+			animationFrame = requestAnimationFrame(animateTransition);
+		}
+	});
+
+	onMount(() => {
+		return () => {
+			if (animationFrame) {
+				cancelAnimationFrame(animationFrame);
+			}
+		};
+	});
 
 	// 定义骨架连接关系
 	const connections = [
@@ -37,23 +125,23 @@
 
 	// 关键点样式配置
 	const pointStyle = (keypoint: PoseKeypoint | undefined) => {
-		if (!keypoint || keypoint.visibility < 0.3) return null;
+		if (!keypoint || (keypoint.visibility ?? 0) < 0.3) return null;
 		return {
 			left: `${keypoint.x * 100}%`,
 			top: `${keypoint.y * 100}%`,
-			opacity: keypoint.visibility * opacity
+			opacity: (keypoint.visibility ?? 1) * opacity
 		};
 	};
 
 	// 线条样式
 	const lineStyle = (start: PoseKeypoint | undefined, end: PoseKeypoint | undefined) => {
-		if (!start || !end || start.visibility < 0.3 || end.visibility < 0.3) return null;
+		if (!start || !end || (start.visibility ?? 0) < 0.3 || (end.visibility ?? 0) < 0.3) return null;
 		return {
 			x1: `${start.x * 100}%`,
 			y1: `${start.y * 100}%`,
 			x2: `${end.x * 100}%`,
 			y2: `${end.y * 100}%`,
-			opacity: Math.min(start.visibility, end.visibility) * opacity
+			opacity: Math.min(start.visibility ?? 1, end.visibility ?? 1) * opacity
 		};
 	};
 </script>
@@ -72,7 +160,7 @@
 
 	<g class="skeleton-lines" filter="url(#glow)">
 		{#each connections as [from, to]}
-			{@const style = lineStyle(pose[from as keyof Pose], pose[to as keyof Pose])}
+			{@const style = lineStyle(currentPose[from as keyof Pose], currentPose[to as keyof Pose])}
 			{#if style}
 				<line
 					x1={style.x1}
@@ -87,7 +175,7 @@
 	</g>
 
 	<g class="skeleton-points">
-		{#each Object.entries(pose) as [key, keypoint]}
+		{#each Object.entries(currentPose) as [key, keypoint]}
 			{@const style = pointStyle(keypoint)}
 			{#if style}
 				<circle
@@ -121,51 +209,60 @@
 		stroke-linecap: round;
 		stroke-linejoin: round;
 		animation: linePulse 2s ease-in-out infinite;
+		transition: all 0.1s linear;
 	}
 
 	.skeleton-points circle {
 		fill: #ffd700;
 		animation: pointPulse 1.5s ease-in-out infinite;
+		transition: cx 0.1s linear, cy 0.1s linear;
+		will-change: cx, cy;
 	}
 
 	.head-point {
 		fill: #ff6b6b;
 		r: 0.012 !important;
+		filter: drop-shadow(0 0 0.008 #ff6b6b);
 	}
 
 	.hand-point {
 		fill: #4ecdc4;
 		r: 0.018 !important;
 		animation: handWave 1s ease-in-out infinite;
+		filter: drop-shadow(0 0 0.01 #4ecdc4);
 	}
 
 	@keyframes linePulse {
 		0%, 100% {
 			stroke-opacity: 0.7;
+			stroke-width: 0.008;
 		}
 		50% {
 			stroke-opacity: 1;
+			stroke-width: 0.01;
 		}
 	}
 
 	@keyframes pointPulse {
 		0%, 100% {
 			transform: scale(1);
+			opacity: 1;
 		}
 		50% {
 			transform: scale(1.2);
+			opacity: 0.9;
 		}
 	}
 
 	@keyframes handWave {
 		0%, 100% {
-			transform: rotate(0deg);
+			transform: rotate(0deg) scale(1);
 		}
 		25% {
-			transform: rotate(5deg);
+			transform: rotate(5deg) scale(1.1);
 		}
 		75% {
-			transform: rotate(-5deg);
+			transform: rotate(-5deg) scale(1.1);
 		}
 	}
 </style>
