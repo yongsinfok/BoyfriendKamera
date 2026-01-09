@@ -2,6 +2,7 @@
 	import type { Pose, PoseKeypoint } from '$lib/types';
 	import { onMount } from 'svelte';
 	import { quintInOut } from 'svelte/easing';
+	import { effect } from 'svelte';
 
 	interface Props {
 		pose: Pose;
@@ -12,9 +13,18 @@
 	let { pose, opacity = 0.8, transitionDuration = 300 }: Props = $props();
 
 	// Store for smooth interpolation
-	let currentPose: Pose = $state(pose);
-	let previousPose: Pose | null = null;
-	let transitioning = false;
+	let currentPose: Pose = $state({ ...pose });
+	let previousPose: Pose | null = $state(null);
+	let transitioning = $state(false);
+
+	// Watch for pose changes to trigger transitions
+	effect(() => {
+		if (JSON.stringify(currentPose) !== JSON.stringify(pose)) {
+			previousPose = { ...currentPose };
+			currentPose = { ...pose };
+			startTransition();
+		}
+	});
 
 	// Linear interpolation between two values
 	const lerp = (start: number, end: number, t: number): number => {

@@ -584,32 +584,27 @@ export class GLMService {
 					detected_issues: issues
 				};
 			}
-		} catch {
-			// If parsing fails, return basic suggestion
-			console.error('Failed to parse pose JSON:', cleanText);
-			suggestionText = cleanText || '姿势分析中...';
-		}
 
-		const normalizedScore = Math.min(1, Math.max(0, score / 100));
-		const isGood = score >= 85 && confidence >= 0.7;
+			const normalizedScore = Math.min(1, Math.max(0, score / 100));
+			const isGood = score >= 85 && confidence >= 0.7;
 
-		const result: AISuggestion = {
-			composition_suggestion: suggestionText,
-			lighting_assessment: '',
-			angle_suggestion: '',
-			overall_score: normalizedScore,
-			should_vibrate: isGood,
-			pose_guide: poseGuide,
-			voice_instruction: instructions.join('，')
-		};
+			const result: AISuggestion = {
+				composition_suggestion: suggestionText,
+				lighting_assessment: '',
+				angle_suggestion: '',
+				overall_score: normalizedScore,
+				should_vibrate: isGood,
+				pose_guide: poseGuide,
+				voice_instruction: instructions.join('，')
+			};
 
-		// Cache the result
-		analysisCache.set(cacheKey, result);
+			// Cache the result
+			analysisCache.set(cacheKey, result);
 
-		// Record performance metric
-		performanceMonitor.record('analyzePose', performance.now() - startTime);
+			// Record performance metric
+			performanceMonitor.record('analyzePose', performance.now() - startTime);
 
-		return result;
+			return result;
 			} catch (error) {
 				// Classify and track the error
 				const appError = classifyError(error);
@@ -625,6 +620,7 @@ export class GLMService {
 				return fallback;
 			}
 		});
+	}
 
 	// Validate and normalize pose coordinates
 	private validatePoseCoordinates(pose: any): any {
