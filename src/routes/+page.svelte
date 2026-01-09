@@ -4,6 +4,7 @@
 	import { goto } from '$app/navigation';
 	import { isAnalyzing, aiSuggestion, createSession, addPhotoToSession, currentSession, currentPhotoCount } from '$lib/stores/camera';
 	import { getGLMService, captureFrame } from '$lib/services/glm';
+	import PoseSkeleton from '$lib/components/PoseSkeleton.svelte';
 
 	let videoElement: HTMLVideoElement;
 	let stream: MediaStream | null = null;
@@ -28,6 +29,9 @@
 	let maxZoom = 1;
 	let zoomSupported = false;
 
+	// AI Coach mode
+	let aiCoachMode = false; // Default to normal mode
+
 	// Settings
 	let apiKey = $settings.apiKey;
 	let enableVibration = $settings.enableVibration;
@@ -38,6 +42,7 @@
 		apiKey = s.apiKey;
 		enableVibration = s.enableVibration;
 		enableGuideLines = s.enableGuideLines;
+		aiCoachMode = s.enablePoseGuide || false;
 	});
 
 	async function startCamera() {
@@ -139,13 +144,30 @@
 				const model = $defaultModel || 'glm-4.6v-flash';
 				const glm = getGLMService(apiKey, model);
 				const style = $currentStyle?.name || '';
-				const suggestion = await glm.analyzeFrame(base64Frame, style);
+
+				// Use different analysis method based on mode
+				let suggestion;
+				if (aiCoachMode) {
+					// AI Coach mode: analyze pose and generate skeleton
+					suggestion = await glm.analyzePose(base64Frame, style);
+				} else {
+					// Normal mode: analyze composition and grid position
+					suggestion = await glm.analyzeFrame(base64Frame, style);
+				}
 
 				aiSuggestion.set(suggestion);
 
 				// Vibrate if score is good (lightweight vibration for battery)
 				if (suggestion.should_vibrate && enableVibration && 'vibrate' in navigator) {
 					navigator.vibrate(30); // Reduced from 50ms to 30ms for battery
+				}
+
+				// Voice coaching if enabled and available
+				if (aiCoachMode && suggestion.voice_instruction && 'speechSynthesis' in window) {
+					const utterance = new SpeechSynthesisUtterance(suggestion.voice_instruction);
+					utterance.lang = 'zh-CN';
+					utterance.rate = 0.9;
+					speechSynthesis.speak(utterance);
 				}
 			} catch (err) {
 				console.error('AI analysis failed:', err);
@@ -406,10 +428,33 @@
 			</div>
 		{/if}
 
+		<!-- AI Pose Guide overlay (when AI Coach mode is active) -->
+		{#if aiCoachMode && $aiSuggestion?.pose_guide?.target_pose}
+			<div class="pose-guide-overlay">
+				<PoseSkeleton pose={$aiSuggestion.pose_guide.target_pose} opacity={0.9} />
+
+				<!-- Pose instruction labels -->
+				{#if $aiSuggestion.pose_guide.instructions && $aiSuggestion.pose_guide.instructions.length > 0}
+					<div class="pose-instructions">
+						{#each $aiSuggestion.pose_guide.instructions as instruction}
+							<div class="instruction-item">
+								<span class="instruction-bullet">→</span>
+								{instruction}
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</div>
+		{/if}
+
 		<!-- Top bar with mode toggle and style selector -->
 		<div class="top-bar">
 			<button class="test-mode-btn" on:click={toggleTestMode}>
 				{testMode ? '📷 相机' : '🖼️ 测试'}
+			</button>
+			<!-- AI Coach mode toggle -->
+			<button class="ai-coach-btn" class:active={aiCoachMode} on:click={() => aiCoachMode = !aiCoachMode}>
+				{aiCoachMode ? '🤖 AI教练' : '📐 构图'}
 			</button>
 			<button class="style-btn" on:click={showStyleSelector}>
 				{#if $currentStyle}
@@ -680,6 +725,87 @@
 			opacity: 1;
 			transform: translate(-50%, -100%) scale(1);
 		}
+	}
+
+	/* AI Pose Guide overlay */
+	.pose-guide-overlay {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		pointer-events: none;
+		animation: fadeIn 0.5s ease-out;
+	}
+
+	@keyframes fadeIn {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
+
+	/* Pose instructions */
+	.pose-instructions {
+		position: absolute;
+		top: 80px;
+		left: 50%;
+		transform: translateX(-50%);
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		max-width: 80%;
+		pointer-events: none;
+	}
+
+	.instruction-item {
+		background: rgba(0, 0, 0, 0.75);
+		backdrop-filter: blur(10px);
+		color: #ffd700;
+		padding: 10px 16px;
+		border-radius: 12px;
+		font-size: 14px;
+		font-weight: 500;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		border: 1px solid rgba(255, 215, 0, 0.3);
+		animation: slideInRight 0.3s ease-out;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+	}
+
+	.instruction-bullet {
+		color: #ffd700;
+		font-weight: bold;
+		font-size: 18px;
+	}
+
+	@keyframes slideInRight {
+		from {
+			opacity: 0;
+			transform: translateX(20px);
+		}
+		to {
+			opacity: 1;
+			transform: translateX(0);
+		}
+	}
+
+	/* AI Coach button */
+	.ai-coach-btn {
+		background: rgba(0, 0, 0, 0.5) !important;
+		border: 2px solid rgba(255, 215, 0, 0.3) !important;
+		transition: all 0.3s ease !important;
+	}
+
+	.ai-coach-btn.active {
+		background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%) !important;
+		border-color: #ffd700 !important;
+		color: #000 !important;
+		font-weight: 600 !important;
+		box-shadow: 0 0 20px rgba(255, 215, 0, 0.5) !important;
 	}
 
 	.top-bar {

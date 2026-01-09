@@ -119,13 +119,16 @@ export interface AISuggestion {
 	overall_score: number;
 	should_vibrate: boolean;
 	guide_lines?: GuideLine[];
+	pose_guide?: PoseGuide; // 新增：AI姿态指导
+	voice_instruction?: string; // 新增：语音指导文本
 }
 
 export interface GuideLine {
-	type: 'rule_of_thirds' | 'standing_position';
+	type: 'rule_of_thirds' | 'standing_position' | 'pose_skeleton'; // 新增pose_skeleton类型
 	position?: string;
 	x?: number;
 	y?: number;
+	pose?: Pose; // 新增：骨架数据
 }
 
 export interface PresetStyle {
@@ -144,4 +147,47 @@ export interface AppSettings {
 	enableVibration: boolean;
 	enableGuideLines: boolean;
 	hasSeenOnboarding: boolean;
+	enablePoseGuide?: boolean; // 新增：是否启用AI姿态指导
+	enableVoiceCoach?: boolean; // 新增：是否启用语音教练
+}
+
+// 骨架关键点定义（基于MediaPipe格式）
+export interface PoseKeypoint {
+	x: number; // 0-1之间的归一化坐标
+	y: number; // 0-1之间的归一化坐标
+	visibility?: number; // 可见度 0-1
+}
+
+// 完整的骨架定义
+export interface Pose {
+	// 面部
+	nose?: PoseKeypoint;
+	left_eye?: PoseKeypoint;
+	right_eye?: PoseKeypoint;
+	left_ear?: PoseKeypoint;
+	right_ear?: PoseKeypoint;
+
+	// 上半身
+	left_shoulder?: PoseKeypoint;
+	right_shoulder?: PoseKeypoint;
+	left_elbow?: PoseKeypoint;
+	right_elbow?: PoseKeypoint;
+	left_wrist?: PoseKeypoint;
+	right_wrist?: PoseKeypoint;
+
+	// 下半身
+	left_hip?: PoseKeypoint;
+	right_hip?: PoseKeypoint;
+	left_knee?: PoseKeypoint;
+	right_knee?: PoseKeypoint;
+	left_ankle?: PoseKeypoint;
+	right_ankle?: PoseKeypoint;
+}
+
+// AI姿态指导
+export interface PoseGuide {
+	target_pose: Pose; // 目标骨架（建议的姿势）
+	current_pose?: Pose; // 当前检测到的骨架
+	instructions: string[]; // 具体的调整指令
+	confidence: number; // AI的置信度
 }

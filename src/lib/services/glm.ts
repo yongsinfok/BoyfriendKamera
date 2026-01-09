@@ -242,6 +242,109 @@ export class GLMService {
 		};
 	}
 
+	// AI Pose Coach - Analyze frame and return pose guidance
+	async analyzePose(imageBase64: string, style?: string): Promise<AISuggestion> {
+		const styleHint = style ? `\n目标风格：${style}。` : '';
+		const prompt = `你是一个专业的拍照姿势教练。${styleHint}
+
+**任务：分析当前画面中人物的姿势，生成一个更好的目标姿势骨架**
+
+请分析画面中人物（如果有），然后：
+1. 识别当前人物的姿势
+2. 生成一个更美观、更自然的目标姿势
+3. 给出具体的调整指导
+
+**JSON格式返回：**
+{
+  "score": 85,
+  "suggestion": "姿势调整建议（20字以内）",
+  "target_pose": {
+    "nose": {"x": 0.5, "y": 0.3, "visibility": 1.0},
+    "left_shoulder": {"x": 0.4, "y": 0.45, "visibility": 1.0},
+    "right_shoulder": {"x": 0.6, "y": 0.45, "visibility": 1.0},
+    "left_elbow": {"x": 0.35, "y": 0.55, "visibility": 0.9},
+    "right_elbow": {"x": 0.65, "y": 0.55, "visibility": 0.9},
+    "left_wrist": {"x": 0.3, "y": 0.65, "visibility": 0.8},
+    "right_wrist": {"x": 0.7, "y": 0.65, "visibility": 0.8},
+    "left_hip": {"x": 0.42, "y": 0.7, "visibility": 0.95},
+    "right_hip": {"x": 0.58, "y": 0.7, "visibility": 0.95}
+  },
+  "instructions": [
+    "左手稍微抬高一点",
+    "头部向右微倾",
+    "肩膀放松下沉"
+  ],
+  "confidence": 0.85
+}
+
+**重要规则：**
+1. 所有坐标使用0-1之间的归一化值（x从左到右，y从上到下）
+2. visibility表示可见度（0-1），看不到或不确定时设为低值
+3. 如果画面中没有人物，score设为0，返回空target_pose
+4. 姿势建议要具体、可执行
+5. 目标姿势要符合美学原则（三分法、对角线、三角形构图等）
+
+**常见姿势模板：**
+- 自然站立：双臂自然下垂，肩膀放松
+- 优雅手势：一只手轻抚头发或脸颊，另一只手自然下垂
+- 活力姿势：双臂举起，做出V字或张开动作
+- 侧身姿势：身体侧转45度，头部转向相机
+- 坐姿：上半身挺直，双手放在膝盖上
+
+现在分析并返回JSON：`;
+
+		const response = await this.call([{ role: 'user', content: prompt }], imageBase64);
+
+		// Clean up the response
+		let cleanText = response.trim()
+			.replace(/^["`]|["`]$/g, '')
+			.replace(/```json\n?|\n?```/g, '')
+			.replace(/\n+/g, ' ')
+			.trim();
+
+		// Try to parse JSON response
+		let suggestionText = 'AI正在分析姿势...';
+		let confidence = 0.7;
+		let score = 60;
+		let targetPose: any = {};
+		let instructions: string[] = [];
+		let poseGuide: any = null;
+
+		try {
+			const parsed = JSON.parse(cleanText);
+			suggestionText = parsed.suggestion || suggestionText;
+			confidence = parsed.confidence ?? 0.7;
+			score = parsed.score ?? 60;
+			targetPose = parsed.target_pose || {};
+			instructions = parsed.instructions || [];
+
+			// Create pose guide object
+			if (Object.keys(targetPose).length > 0) {
+				poseGuide = {
+					target_pose: targetPose,
+					instructions: instructions,
+					confidence: confidence
+				};
+			}
+		} catch {
+			// If parsing fails, return basic suggestion
+			suggestionText = cleanText || '姿势分析中...';
+		}
+
+		const normalizedScore = Math.min(1, Math.max(0, score / 100));
+		const isGood = score >= 85 && confidence >= 0.7;
+
+		return {
+			composition_suggestion: suggestionText,
+			lighting_assessment: '',
+			angle_suggestion: '',
+			overall_score: normalizedScore,
+			should_vibrate: isGood,
+			pose_guide: poseGuide,
+			voice_instruction: instructions.join('，')
+		};
+	}
+
 	// Photo selection analysis
 	async selectPhotos(photoData: Array<{ id: string; base64: string }>): Promise<{ selected: Array<{ photo_id: string; score: number; reasons: string[] }>; summary: string }> {
 		const photoList = photoData.map((p, i) => `照片${i + 1}: [ID: ${p.id}]`).join('\n');
