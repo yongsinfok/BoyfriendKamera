@@ -9,6 +9,12 @@ import {
 	debounce,
 	optimizeImageForAnalysis
 } from '$lib/utils/performanceOptimizer';
+import {
+	classifyError,
+	generateFallbackSuggestion,
+	recoverFromError,
+	errorTracker
+} from '$lib/utils/errorHandling';
 
 const GLM_API_BASE = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
 
@@ -266,8 +272,9 @@ export class GLMService {
 
 		// Use request queue to prevent overwhelming the API
 		return requestQueue.add(async () => {
-			const styleHint = style ? `\n目标风格：${style}。根据这种风格的特点调整姿势建议。` : '';
-			const prompt = `你是一个世界级的专业拍照姿势教练和摄影指导，拥有20年摄影指导经验。${styleHint}
+			try {
+				const styleHint = style ? `\n目标风格：${style}。根据这种风格的特点调整姿势建议。` : '';
+				const prompt = `你是一个世界级的专业拍照姿势教练和摄影指导，拥有20年摄影指导经验。${styleHint}
 
 **核心任务：精确分析当前画面，生成完美的目标姿势骨架**
 
@@ -587,6 +594,20 @@ export class GLMService {
 		performanceMonitor.record('analyzePose', performance.now() - startTime);
 
 		return result;
+			} catch (error) {
+				// Classify and track the error
+				const appError = classifyError(error);
+				errorTracker.track(appError);
+
+				// Try to recover or use fallback
+				const fallback = await recoverFromError(appError, {
+					retryCount: 0,
+					maxRetries: 2,
+					lastSuccess: null
+				});
+
+				return fallback;
+			}
 		});
 
 	// Validate and normalize pose coordinates
