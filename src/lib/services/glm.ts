@@ -1,6 +1,7 @@
 import type { AISuggestion, PhotoAnalysis, StyleProfile, GuideLine, Pose, PoseKeypoint } from '$lib/types';
 import { POSE_TEMPLATES } from '$lib/data/poseTemplates';
 import { calculatePoseMatchScore, calculatePoseSymmetry, detectPoseIssues, calculatePoseDifficulty } from '$lib/utils/poseMatching';
+import { getPoseSmoother, type SmoothingConfig } from '$lib/utils/poseSmoothing';
 import {
 	analysisCache,
 	requestQueue,
@@ -536,6 +537,21 @@ export class GLMService {
 
 			// Validate pose coordinates
 			targetPose = this.validatePoseCoordinates(targetPose);
+
+			// Apply pose smoothing to reduce jitter
+			if (Object.keys(targetPose).length > 0) {
+				const smoothingConfig: SmoothingConfig = {
+					emaFactor: 0.4, // Moderate smoothing
+					minConfidence: 0.3,
+					maxChange: 0.15,
+					outlierThreshold: 2.5,
+					enableKalman: true,
+					processNoise: 0.01,
+					measurementNoise: 0.08
+				};
+				const smoother = getPoseSmoother(smoothingConfig);
+				targetPose = smoother.smoothPose(targetPose, 1.0);
+			}
 
 			// Enhanced pose analysis using matching utilities
 			const symmetry = calculatePoseSymmetry(targetPose);
