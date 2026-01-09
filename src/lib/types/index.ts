@@ -196,4 +196,11 @@ export interface PoseGuide {
 		correction: string;
 	};
 	step_by_step?: string[]; // 分步指导
+	symmetry_score?: number; // 对称度分数（0-100）
+	detected_issues?: Array<{ // 检测到的问题
+		issue: string;
+		severity: 'high' | 'medium' | 'low';
+		affectedParts: string[];
+		suggestion: string;
+	}>;
 }

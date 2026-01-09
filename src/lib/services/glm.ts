@@ -1,4 +1,6 @@
 import type { AISuggestion, PhotoAnalysis, StyleProfile, GuideLine, Pose, PoseKeypoint } from '$lib/types';
+import { POSE_TEMPLATES } from '$lib/data/poseTemplates';
+import { calculatePoseMatchScore, calculatePoseSymmetry, detectPoseIssues, calculatePoseDifficulty } from '$lib/utils/poseMatching';
 
 const GLM_API_BASE = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
 
@@ -508,6 +510,23 @@ export class GLMService {
 			// Validate pose coordinates
 			targetPose = this.validatePoseCoordinates(targetPose);
 
+			// Enhanced pose analysis using matching utilities
+			const symmetry = calculatePoseSymmetry(targetPose);
+			const issues = detectPoseIssues(targetPose);
+			const difficulty = calculatePoseDifficulty(targetPose);
+
+			// Add symmetry feedback if significant asymmetry detected
+			if (symmetry.symmetryScore < 80) {
+				instructions.push(`⚖️ 对称度：${symmetry.symmetryScore}% - 调整${symmetry.asymmetricalParts.join('、')}使其更对称`);
+			}
+
+			// Add detected issues if any
+			for (const issue of issues.slice(0, 3)) { // Limit to top 3 issues
+				const severityEmoji = issue.severity === 'high' ? '🔴' :
+				                      issue.severity === 'medium' ? '🟡' : '🟢';
+				instructions.push(`${severityEmoji} ${issue.issue}：${issue.suggestion}`);
+			}
+
 			// Create enhanced pose guide object
 			if (Object.keys(targetPose).length > 0) {
 				poseGuide = {
@@ -515,9 +534,11 @@ export class GLMService {
 					current_pose: parsed.current_pose_analysis,
 					instructions: instructions,
 					confidence: confidence,
-					difficulty: parsed.difficulty || 1,
+					difficulty: difficulty.difficulty,
 					common_mistake: parsed.common_mistake,
-					step_by_step: parsed.step_by_step
+					step_by_step: parsed.step_by_step,
+					symmetry_score: symmetry.symmetryScore,
+					detected_issues: issues
 				};
 			}
 		} catch {
