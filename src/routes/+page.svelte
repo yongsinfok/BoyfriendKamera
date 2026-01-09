@@ -17,25 +17,13 @@
 	type CameraMode = 'photo' | 'video' | 'portrait' | 'square' | 'pano';
 	let currentMode: CameraMode = 'photo';
 
-	// Flash modes
-	type FlashMode = 'auto' | 'on' | 'off';
-	let flashMode: FlashMode = 'auto';
-
-	// HDR
-	let hdrEnabled = false;
-
-	// Live Photo
-	let livePhotoEnabled = true;
-
 	// Timer
 	let timerSeconds = 0; // 0, 3, 10
 	let timerActive = false;
+	let countdownDisplay = 0; // Current countdown value to display
 
 	// Grid
 	let gridEnabled = false;
-
-	// Filters
-	let showFilters = false;
 
 	// Camera facing
 	let facingMode: 'user' | 'environment' = 'environment';
@@ -140,20 +128,6 @@
 		await startCamera();
 	}
 
-	function cycleFlash() {
-		const modes: FlashMode[] = ['auto', 'on', 'off'];
-		const currentIndex = modes.indexOf(flashMode);
-		flashMode = modes[(currentIndex + 1) % modes.length];
-	}
-
-	function toggleHDR() {
-		hdrEnabled = !hdrEnabled;
-	}
-
-	function toggleLivePhoto() {
-		livePhotoEnabled = !livePhotoEnabled;
-	}
-
 	function cycleTimer() {
 		const options = [0, 3, 10];
 		const currentIndex = options.indexOf(timerSeconds);
@@ -172,20 +146,14 @@
 		if (timerSeconds > 0) {
 			timerActive = true;
 			for (let i = timerSeconds; i > 0; i--) {
+				countdownDisplay = i;
 				await new Promise(resolve => setTimeout(resolve, 1000));
 			}
+			countdownDisplay = 0;
 			timerActive = false;
 		}
 
 		isCapturing = true;
-
-		// Flash effect
-		if (flashMode === 'on') {
-			const flash = document.createElement('div');
-			flash.className = 'flash-effect';
-			document.body.appendChild(flash);
-			setTimeout(() => flash.remove(), 100);
-		}
 
 		// Capture photo
 		const canvas = document.createElement('canvas');
@@ -503,15 +471,19 @@
 
 	<!-- Top toolbar (iOS style) -->
 	<div class="top-toolbar">
-		<!-- Left: Flash and Timer -->
+		<!-- Left: Timer only -->
 		<div class="top-left-tools">
-			<button class="top-tool-btn" on:click={cycleFlash} aria-label="闪光灯">
-				<span class="top-icon flash-icon" class:flash-auto={flashMode === 'auto'} class:flash-on={flashMode === 'on'} class:flash-off={flashMode === 'off'}></span>
-			</button>
 			<button class="top-tool-btn" on:click={cycleTimer} aria-label="定时器">
-				<span class="top-icon timer-icon"></span>
+				<svg class="stopwatch-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+					<circle cx="12" cy="13" r="8"/>
+					<path d="M12 3v3M12 17v1M8 13h1"/>
+					<path d="M16 5l-2 2"/>
+					<path d="M18 3l-1 1"/>
+					<path d="M12 3l1.5 1.5"/>
+					<circle cx="12" cy="3" r="1" fill="currentColor"/>
+				</svg>
 				{#if timerSeconds > 0}
-					<span class="top-icon-label">{timerSeconds}</span>
+					<span class="top-icon-label">{timerSeconds}s</span>
 				{/if}
 			</button>
 		</div>
@@ -555,8 +527,8 @@
 			class:timer-active={timerActive}
 			aria-label="拍照"
 		>
-			{#if timerActive && timerSeconds > 0}
-				<span class="timer-countdown">{timerSeconds}</span>
+			{#if timerActive && countdownDisplay > 0}
+				<span class="timer-countdown">{countdownDisplay}</span>
 			{/if}
 		</button>
 
@@ -736,90 +708,11 @@
 		display: block;
 	}
 
-	/* Flash icon styles */
-	.flash-icon {
-		background: none;
-		position: relative;
-	}
-
-	.flash-icon::before {
-		content: '';
-		position: absolute;
-		top: 0;
-		left: 0;
-		width: 100%;
-		height: 100%;
-		background-size: contain;
-		background-repeat: no-repeat;
-		background-position: center;
-	}
-
-	/* Auto flash - white lightning bolt with outline */
-	.flash-auto {
-		color: rgba(255, 255, 255, 0.8);
-	}
-
-	.flash-auto::after {
-		content: '⚡';
-		font-size: 18px;
-	}
-
-	/* On flash - yellow lightning bolt */
-	.flash-on {
-		color: #FFCC00;
-	}
-
-	.flash-on::after {
-		content: '⚡';
-		font-size: 18px;
-	}
-
-	/* Off flash - yellow lightning bolt with slash */
-	.flash-off {
-		color: #FFCC00;
-	}
-
-	.flash-off::after {
-		content: '⚡';
-		font-size: 18px;
-		position: relative;
-	}
-
-	.flash-off::before {
-		content: '';
-		position: absolute;
-		width: 16px;
-		height: 2px;
-		background: #FFCC00;
-		transform: rotate(45deg);
-		top: 50%;
-		left: 50%;
-		margin-left: -8px;
-		margin-top: -1px;
-	}
-
-	/* Timer icon */
-	.timer-icon::after {
-		content: '';
-		position: absolute;
-		top: 0;
-		left: 0;
-		width: 20px;
-		height: 20px;
-		border: 2px solid rgba(255, 255, 255, 0.8);
-		border-radius: 50%;
-	}
-
-	.timer-icon::before {
-		content: '';
-		position: absolute;
-		top: 50%;
-		left: 50%;
-		width: 8px;
-		height: 2px;
-		background: rgba(255, 255, 255, 0.8);
-		transform-origin: left center;
-		transform: translateY(-50%) rotate(0deg);
+	/* Stopwatch icon */
+	.stopwatch-icon {
+		width: 22px;
+		height: 22px;
+		color: rgba(255, 255, 255, 0.9);
 	}
 
 	.top-icon-label {
